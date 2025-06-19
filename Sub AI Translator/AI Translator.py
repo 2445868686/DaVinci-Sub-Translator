@@ -23,14 +23,14 @@ OPENAI_DEFAULT_URL   = "https://api.openai.com"
 OPENAI_DEFAULT_MODEL = "gpt-4o-mini"
 
 CONTEXT_WINDOW = 1
-SYSTEM_PROMPT = (
-    "You are a translation engine.<br/><br/>"
-    "Translate the user message into {target_lang}.<br/><br/>"
-    "Return ONLY the translated sentence, keep the same meaning.<br/><br/>"
-    "Note: For any content that should not be translated "
-    "(e.g., proper nouns, code snippets, or other non-translatable elements), "
-    "preserve it in its original form."
-)
+SYSTEM_PROMPT = """
+You are a translation engine.<br/><br/>
+Translate the user message into {target_lang}.<br/><br/>
+Return ONLY the translated sentence, keep the same meaning.<br/><br/>
+Note: For any content that should not be translated
+(e.g., proper nouns, code snippets, or other non-translatable elements), "
+    "preserve it in its original form.
+"""
 
 GOOGLE_PROVIDER = "Google"
 AZURE_PROVIDER  = "Microsoft (API Key)"
@@ -51,33 +51,14 @@ AZURE_LANG_CODE_MAP = {  # Microsoft
     "Ukrainian": "uk", "Vietnamese": "vi", "Dutch": "nl",
 }
 GOOGLE_LANG_CODE_MAP = {   # Google
-    "中文（普通话）": "zh-cn", "中文（粤语）": "zh-tw",
+    "中文（普通话）": "zh-CN", "中文（粤语）": "zh-TW",
     "English": "en", "Japanese": "ja", "Korean": "ko", "Spanish": "es",
     "Portuguese": "pt", "French": "fr", "Indonesian": "id", "German": "de",
     "Russian": "ru", "Italian": "it", "Arabic": "ar", "Turkish": "tr",
     "Ukrainian": "uk", "Vietnamese": "vi", "Dutch": "nl",
 }
 # ===========================================
-import sys, types, urllib.parse
-from email.message import Message
-
-if 'cgi' not in sys.modules:
-    mod = types.ModuleType('cgi')
-    # 让 googletrans.parse_qs 能用
-    mod.parse_qs = urllib.parse.parse_qs
-
-    def parse_header(line):
-        m = Message()
-        # Message 需要先设置 Content-Type 才能解析
-        m['content-type'] = line
-        main = m.get_content_type()
-        params = dict(m.get_params()[1:])
-        return main, params
-
-    mod.parse_header = parse_header
-
-    sys.modules['cgi'] = mod
-
+import sys
 import os, re, json, time, platform,concurrent.futures
 from abc import ABC, abstractmethod
 import webbrowser
@@ -86,7 +67,7 @@ import string
 
 try:
     import requests
-    from googletrans import Translator 
+    from deep_translator import GoogleTranslator
 except ImportError:
     # 1. 获取脚本所在目录（备用）
     script_path = os.path.dirname(os.path.abspath(sys.argv[0]))
@@ -135,7 +116,7 @@ except ImportError:
 
     try:
         import requests
-        from googletrans import Translator 
+        from deep_translator import GoogleTranslator
         print(lib_dir)
     except ImportError as e:
         print("依赖导入失败，请确保所有依赖已打包至 Lib 目录中：", lib_dir, "\n错误信息：", e)
@@ -177,23 +158,22 @@ class GoogleProvider(BaseProvider):
 
     def __init__(self, cfg):
         super().__init__(cfg)
-        self.translator = Translator(
-            service_urls=cfg.get("service_urls"),
-        )
+        # deep_translator 不需要预先实例化 translator
 
     def translate(self, text, target_lang):
         """
-        target_lang 需为 googletrans 语言代码，如 'zh-cn' / 'en'
+        target_lang: deep_translator 接受的语言代码，例如 'zh-cn' 或 'en'
         """
         for attempt in range(1, self.cfg.get("max_retry", 3) + 1):
             try:
-                res = self.translator.translate(
-                    text, dest=target_lang)       # 不再传 timeout
-                return res.text
+                # 每次调用时根据目标语言新建一个 GoogleTranslator 实例
+                translator = GoogleTranslator(source='auto', target=target_lang)
+                return translator.translate(text)
             except Exception as e:
                 if attempt == self.cfg.get("max_retry", 3):
                     raise
                 time.sleep(2 ** attempt)
+
 
 # -- Microsoft ----------------------------
 class AzureProvider(BaseProvider):
@@ -241,17 +221,17 @@ class AITranslatorProvider(BaseProvider):
         user_content = "\n\n".join(user_msg_parts)
 
         # ---------- 2 ChatCompletion payload ----------
+        prompt_content = SYSTEM_PROMPT.format(
+            target_lang=f"{{{target_lang}}}"
+         )
+        #print(prompt_content)
         payload = {
             "model": self.cfg["model"],
             "messages": [
                 {
                     "role": "system",
-                    "content": (
-                        "You are a translation engine. "
-                        f"Translate the user message into {target_lang}. "
-                        "Note: For any content that should not be translated (e.g., proper nouns, code snippets, or other non-translatable elements), preserve it in its original form.\n"
-                        "Return ONLY the translated sentence, keep the same meaning."
-                    )
+                    "content": prompt_content
+                    
                 },
                 {"role": "user", "content": user_content}
             ],
@@ -420,7 +400,7 @@ ai_config_window = dispatcher.AddWindow(
     {
         "ID": "AITranslatorConfigWin",
         "WindowTitle": "AI Translator API",
-        "Geometry": [X_CENTER, Y_CENTER, 400, 200],
+        "Geometry": [750, 400, 400, 300],
         "Hidden": True,
         "StyleSheet": """
         * {
@@ -434,12 +414,15 @@ ai_config_window = dispatcher.AddWindow(
                 ui.Label({"ID": "OpenAILabel","Text": "填写AI Translator 信息", "Alignment": {"AlignHCenter": True, "AlignVCenter": True},"Weight": 0.1}),
                 ui.Label({"ID":"OpenAIModelLabel","Text":"模型","Weight":0.1}),
                 ui.ComboBox({"ID":"OpenAIModelCombo","Weight":0.2}),  
+                ui.Label({"ID": "NewModelNameLabel", "Text": "* Model name"}),
+                ui.LineEdit({"ID": "NewModelName", "ReadOnly":True, "Text": ""}),
+                ui.Label({"ID": "NewBaseURLLabel", "Text": "* Base URL"}),
+                ui.LineEdit({"ID": "NewBaseURL", "ReadOnly":True, "Text": ""}),
+                ui.Label({"ID": "NewApiKeyLabel", "Text": "* API Key"}),
+                ui.LineEdit({"ID": "NewApiKey", "Text": "", "ReadOnly":True, "EchoMode": "Password"}),
                 ui.HGroup({"Weight": 0.15}, [
                     ui.Button({"ID": "ShowAddModel", "Text": "新增模型","Weight": 1}),
                     ui.Button({"ID": "ShowEditModel", "Text": "注册","Weight": 1}),
-                    ui.Button({"ID": "OpenAIConfirm", "Text": "确定","Weight": 1}),
-                    
-                    
                 ]),
                 
                 #ui.Label({"ID":"SystemPromptLabel","Text":"提示词：","Weight":0.1}),
@@ -456,7 +439,7 @@ azure_config_window = dispatcher.AddWindow(
     {
         "ID": "AzureConfigWin",
         "WindowTitle": "Microsoft API",
-        "Geometry": [X_CENTER, Y_CENTER, 400, 200],
+        "Geometry": [750, 400, 400, 200],
         "Hidden": True,
         "StyleSheet": """
         * {
@@ -490,7 +473,7 @@ add_model_window = dispatcher.AddWindow(
     {
         "ID": "AddModelWin",
         "WindowTitle": "Add Model",
-        "Geometry": [X_CENTER, Y_CENTER, 300, 400],
+        "Geometry": [750, 400, 300, 400],
         "Hidden": True,
         "StyleSheet": "*{font-size:14px;}"
     },
@@ -501,9 +484,9 @@ add_model_window = dispatcher.AddWindow(
             ui.LineEdit({"ID": "NewModelDisplay", "Text": ""}),
             ui.Label({"ID": "NewModelNameLabel", "Text": "* Model name"}),
             ui.LineEdit({"ID": "NewModelName", "Text": ""}),
-            ui.Label({"ID": "NewBaseURLLabel", "Text": "Base URL"}),
+            ui.Label({"ID": "NewBaseURLLabel", "Text": "* Base URL"}),
             ui.LineEdit({"ID": "NewBaseURL", "Text": ""}),
-            ui.Label({"ID": "NewApiKeyLabel", "Text": "API Key"}),
+            ui.Label({"ID": "NewApiKeyLabel", "Text": "* API Key"}),
             ui.LineEdit({"ID": "NewApiKey", "Text": "", "EchoMode": "Password"}),
             ui.Label({"ID": "VerifyStatus", "Text": "", "Alignment": {"AlignHCenter": True}}),
             ui.HGroup([
@@ -567,11 +550,13 @@ translations = {
         "AzureConfirm":"确定",
         "AzureRegisterButton":"注册",
         "AzureLabel":"填写Azure API信息",
-        "OpenAILabel":"填写AI Translator API信息",
-        "OpenAIConfirm":"确定",
+        "OpenAILabel":"填写OpenAI Format API信息",
         "ShowAddModel":"新增模型",
         "ShowEditModel":"编辑模型",
         "VerifyModel":"验证",
+        "AddModelTitle":"添加 OpenAI 兼容模型",
+        "NewModelNameLabel":"* 模型",
+        "NewModelDisplayLabel":"名称",
         "AddModelBtn":"添加",
         
         
@@ -593,10 +578,12 @@ translations = {
         "AzureConfirm":"OK",
         "AzureRegisterButton":"Register",
         "AzureLabel":"Azure API",
-        "OpenAILabel":"AI Translator API",
-        "OpenAIConfirm":"OK",
+        "OpenAILabel":"OpenAI Format API",
         "ShowAddModel":"Add Model",
         "ShowEditModel":"Edit Model",
+        "AddModelTitle":"Add OpenAI Format Model",
+        "NewModelNameLabel":"* Model name",
+        "NewModelDisplayLabel":"Display name",
         "VerifyModel":"Verify",
         "AddModelBtn":"Add",
         
@@ -775,9 +762,8 @@ def on_show_openai(ev):
 win.On.ShowAITranslator.Clicked = on_show_openai
 
 def on_openai_close(ev):
-    print("AI Translator API setup is complete.")
+    print("OpenAI Format API setup is complete.")
     ai_config_window.Hide()
-ai_config_window.On.OpenAIConfirm.Clicked = on_openai_close
 ai_config_window.On.AITranslatorConfigWin.Close = on_openai_close
 
 
@@ -902,13 +888,41 @@ def on_add_model(ev):
 
     # === 4 持久化写回 ===
     save_settings(custom_models, custom_models_file)
-
     # === 5 关闭当前窗口，回到主配置窗口 ===
     ai_config_window.Show()
     add_model_window.Hide()
 
 add_model_window.On.VerifyModel.Clicked = on_verify_model
 add_model_window.On.AddModelBtn.Clicked = on_add_model
+
+def on_openai_model_changed(ev):
+    """
+    当 OpenAIModelCombo 选中项发生变化时，
+    实时更新 NewModelName、NewBaseURL、NewApiKey 的显示内容。
+    """
+    # 1. 获取下拉框当前显示名
+    disp = openai_items["OpenAIModelCombo"].CurrentText
+    print(disp)
+
+    # 2. 从 custom_models 中查询：优先查“自定义”表，否则查“预装”表
+    entry = (
+        custom_models.get("custom_models", {}).get(disp)
+        or custom_models.get("models", {}).get(disp)
+    )
+
+    # 3. 如果找到了 dict，就更新对应字段；否则清空或回退
+    if isinstance(entry, dict):
+        openai_items["NewModelName"].PlaceholderText = entry.get("model", "")
+        openai_items["NewBaseURL"].PlaceholderText = entry.get("base_url", "")
+        openai_items["NewApiKey"].PlaceholderText  = entry.get("api_key", "")
+    else:
+        # 无配置时可清空，也可回退到默认
+        openai_items["NewModelName"].PlaceholderText = ""
+        openai_items["NewBaseURL"].PlaceholderText = ""
+        openai_items["NewApiKey"].PlaceholderText  = ""
+
+# 4. 绑定事件：ComboBox 的 CurrentIndexChanged
+ai_config_window.On.OpenAIModelCombo.CurrentIndexChanged = on_openai_model_changed
 # =============== 5  Resolve 辅助函数 ===============
 def connect_resolve():
     resolve = dvr_script.scriptapp("Resolve")
