@@ -9,10 +9,8 @@ PYTHON=python3
 # 新增了 setuptools 和 wheel，它们是从源码（如 .tar.gz）构建和安装包所必需的工具
 # pip 会智能地利用它们来处理 googletrans 的源码包
 PACKAGES=(
-  "googletrans==4.0.0-rc1"
+  "deep_translator"
   "requests"
-  "setuptools"
-  "wheel"
 )
 
 # DaVinci Resolve Fusion 脚本目录
