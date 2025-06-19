@@ -34,7 +34,7 @@ Note: For any content that should not be translated
 
 GOOGLE_PROVIDER = "Google"
 AZURE_PROVIDER  = "Microsoft (API Key)"
-AI_PROVIDER     = "AI Translator (API Key)"
+OPEN_AI_FORMAT_PROVIDER     = "Open AI Format (API Key)"
 
 AZURE_DEFAULT_KEY    = ""
 AZURE_DEFAULT_REGION = ""
@@ -201,7 +201,7 @@ class AzureProvider(BaseProvider):
                 
 # -- AI Translator ------------------------
 class AITranslatorProvider(BaseProvider):
-    name = AI_PROVIDER
+    name = OPEN_AI_FORMAT_PROVIDER
 
     def translate(self, text, target_lang, prefix: str = "", suffix: str = ""):
         """
@@ -302,7 +302,7 @@ PROVIDERS_CFG = {
             "max_retry": MAX_RETRY,
             "timeout":  15
         },
-        AI_PROVIDER: {
+        OPEN_AI_FORMAT_PROVIDER: {
             "class": "AITranslatorProvider",
             "base_url": OPENAI_DEFAULT_URL,
             "api_key":  OPENAI_DEFAULT_KEY,
@@ -367,8 +367,8 @@ win = dispatcher.AddWindow(
                         ui.Button({"ID": "ShowAzure", "Text": "配置","Weight": 0.1,}),
                     ]),
                     ui.HGroup({"Weight":0.1},[
-                        ui.Label({"ID":"AIConfigLabel","Text":"AI Translator","Weight":0.1}),
-                        ui.Button({"ID":"ShowAITranslator","Text":"配置","Weight":0.1}),
+                        ui.Label({"ID":"OpenAIFormatConfigLabel","Text":"OpenAI Format","Weight":0.1}),
+                        ui.Button({"ID":"ShowOpenAIFormat","Text":"配置","Weight":0.1}),
                     ]),
                     ui.Label({"ID":"MoreScriptLabel","Text":"","Weight":0.1,"Alignment": {"AlignHCenter": True, "AlignVCenter": True}}),
                     ui.Button({"ID":"TTSButton","Text":"文字转语音插件","Weight":0.1}),
@@ -396,7 +396,7 @@ win = dispatcher.AddWindow(
 
 # --- OpenAI 单独配置窗口（维持原有） ---
 # openai配置窗口
-ai_config_window = dispatcher.AddWindow(
+openai_format_config_window = dispatcher.AddWindow(
     {
         "ID": "AITranslatorConfigWin",
         "WindowTitle": "AI Translator API",
@@ -411,24 +411,22 @@ ai_config_window = dispatcher.AddWindow(
     [
         ui.VGroup(
             [
-                ui.Label({"ID": "OpenAILabel","Text": "填写AI Translator 信息", "Alignment": {"AlignHCenter": True, "AlignVCenter": True},"Weight": 0.1}),
-                ui.Label({"ID":"OpenAIModelLabel","Text":"模型","Weight":0.1}),
-                ui.ComboBox({"ID":"OpenAIModelCombo","Weight":0.2}),  
-                ui.Label({"ID": "NewModelNameLabel", "Text": "* Model name"}),
-                ui.LineEdit({"ID": "NewModelName", "ReadOnly":True, "Text": ""}),
-                ui.Label({"ID": "NewBaseURLLabel", "Text": "* Base URL"}),
-                ui.LineEdit({"ID": "NewBaseURL", "ReadOnly":True, "Text": ""}),
-                ui.Label({"ID": "NewApiKeyLabel", "Text": "* API Key"}),
-                ui.LineEdit({"ID": "NewApiKey", "Text": "", "ReadOnly":True, "EchoMode": "Password"}),
-                ui.HGroup({"Weight": 0.15}, [
-                    ui.Button({"ID": "ShowAddModel", "Text": "新增模型","Weight": 1}),
-                    ui.Button({"ID": "ShowEditModel", "Text": "注册","Weight": 1}),
+                ui.Label({"ID": "OpenAIFormatLabel","Text": "填写AI Translator 信息", "Alignment": {"AlignHCenter": True, "AlignVCenter": True},"Weight": 0.1}),
+                ui.Label({"ID":"OpenAIFormatModelLabel","Text":"模型","Weight":0.1}),
+                ui.HGroup({"Weight": 0.2}, [
+                    ui.ComboBox({"ID":"OpenAIFormatModelCombo","Weight":0.2}),  
+                    ui.LineEdit({"ID": "OpenAIFormatModelName", "ReadOnly":True, "Text": ""}),
                 ]),
-                
-                #ui.Label({"ID":"SystemPromptLabel","Text":"提示词：","Weight":0.1}),
-                #ui.TextEdit({"ID":"SystemPromptTxt","Text": f"<span style='color:#f59b37;font-size:16px;'>{SYSTEM_PROMPT}</span>","ReadOnly":True,"Weight":1}), 
-                
-                
+                ui.Label({"ID": "OpenAIFormatBaseURLLabel", "Text": "* Base URL"}),
+                ui.LineEdit({"ID": "OpenAIFormatBaseURL",  "Text": ""}),
+                ui.Label({"ID": "OpenAIFormatApiKeyLabel", "Text": "* API Key"}),
+                ui.LineEdit({"ID": "OpenAIFormatApiKey", "Text": "",  "EchoMode": "Password"}),
+                ui.Label({"ID": "VerifyStatus", "Text": "", "Alignment": {"AlignHCenter": True}}),
+                ui.HGroup({"Weight": 0.2}, [
+                    ui.Button({"ID": "VerifyModel", "Text": "验证","Weight": 1}),
+                    ui.Button({"ID": "ShowAddModel", "Text": "新增模型","Weight": 1}),
+                    ui.Button({"ID": "DeleteModel", "Text": "删除模型","Weight": 1}),
+                ]),
             ]
         )
     ]
@@ -481,16 +479,10 @@ add_model_window = dispatcher.AddWindow(
         ui.VGroup([
             ui.Label({"ID": "AddModelTitle", "Text": "添加 OpenAI 兼容模型", "Alignment": {"AlignHCenter": True, "AlignVCenter": True}}),
             ui.Label({"ID": "NewModelDisplayLabel", "Text": "Display name"}),
-            ui.LineEdit({"ID": "NewModelDisplay", "Text": ""}),
-            ui.Label({"ID": "NewModelNameLabel", "Text": "* Model name"}),
-            ui.LineEdit({"ID": "NewModelName", "Text": ""}),
-            ui.Label({"ID": "NewBaseURLLabel", "Text": "* Base URL"}),
-            ui.LineEdit({"ID": "NewBaseURL", "Text": ""}),
-            ui.Label({"ID": "NewApiKeyLabel", "Text": "* API Key"}),
-            ui.LineEdit({"ID": "NewApiKey", "Text": "", "EchoMode": "Password"}),
-            ui.Label({"ID": "VerifyStatus", "Text": "", "Alignment": {"AlignHCenter": True}}),
+            ui.LineEdit({"ID": "addOpenAIFormatModelDisplay", "Text": ""}),
+            ui.Label({"ID": "OpenAIFormatModelNameLabel", "Text": "* Model name"}),
+            ui.LineEdit({"ID": "addOpenAIFormatModelName", "Text": ""}),
             ui.HGroup([
-                ui.Button({"ID": "VerifyModel", "Text": "Verify"}),
                 ui.Button({"ID": "AddModelBtn", "Text": "Add Model"}),
             ])
         ])
@@ -536,12 +528,13 @@ msgbox.On.msg.Close = on_msg_close
 translations = {
     "cn": {
         "Tabs": ["翻译","配置"],
-        "OpenAIModelLabel":"选择模型：",
+        "OpenAIFormatModelLabel":"选择模型：",
         "TargetLangLabel":"目标语音：",
         "TransButton":"开始翻译",
         "MicrosoftConfigLabel":"Microsoft",
         "ShowAzure":"配置",
-        "ShowAITranslator": "配置",
+        "OpenAIFormatConfigLabel":"Open AI 格式",
+        "ShowOpenAIFormat": "配置",
         "MoreScriptLabel":"\n———————————更多功能———————————",
         "TTSButton":"文字转语音（TTS）插件",
         "ProviderLabel":"服务商",
@@ -549,13 +542,13 @@ translations = {
         "AzureApiKeyLabel":"密钥",
         "AzureConfirm":"确定",
         "AzureRegisterButton":"注册",
-        "AzureLabel":"填写Azure API信息",
-        "OpenAILabel":"填写OpenAI Format API信息",
-        "ShowAddModel":"新增模型",
-        "ShowEditModel":"编辑模型",
+        "AzureLabel":"填写 Azure API 信息",
+        "OpenAIFormatLabel":"填写 OpenAI Format API 信息",
         "VerifyModel":"验证",
+        "ShowAddModel":"新增模型",
+        "DeleteModel":"删除模型",
         "AddModelTitle":"添加 OpenAI 兼容模型",
-        "NewModelNameLabel":"* 模型",
+        "OpenAIFormatModelNameLabel":"* 模型",
         "NewModelDisplayLabel":"名称",
         "AddModelBtn":"添加",
         
@@ -564,12 +557,13 @@ translations = {
 
     "en": {
         "Tabs": ["Translator", "Configuration"],
-        "OpenAIModelLabel":"Select Model:",
+        "OpenAIFormatModelLabel":"Select Model:",
         "TargetLangLabel":"Target Language:",
         "TransButton":"Translate",
         "MicrosoftConfigLabel":"Microsoft",
         "ShowAzure":"Config",
-        "ShowAITranslator": "Config",
+        "OpenAIFormatConfigLabel":"Open AI Format",
+        "ShowOpenAIFormat": "Config",
         "MoreScriptLabel":"\n—————————MORE FEATURES—————————",
         "TTSButton":"Text to Speech (TTS) Script",
         "ProviderLabel":"Provider",
@@ -578,13 +572,13 @@ translations = {
         "AzureConfirm":"OK",
         "AzureRegisterButton":"Register",
         "AzureLabel":"Azure API",
-        "OpenAILabel":"OpenAI Format API",
-        "ShowAddModel":"Add Model",
-        "ShowEditModel":"Edit Model",
-        "AddModelTitle":"Add OpenAI Format Model",
-        "NewModelNameLabel":"* Model name",
-        "NewModelDisplayLabel":"Display name",
+        "OpenAIFormatLabel":"OpenAI Format API",
         "VerifyModel":"Verify",
+        "ShowAddModel":"Add Model",
+        "DeleteModel":"Delete Model",
+        "AddModelTitle":"Add OpenAI Format Model",
+        "OpenAIFormatModelNameLabel":"* Model name",
+        "NewModelDisplayLabel":"Display name",
         "AddModelBtn":"Add",
         
         
@@ -592,7 +586,7 @@ translations = {
 }    
 
 items       = win.GetItems()
-openai_items = ai_config_window.GetItems()
+openai_items = openai_format_config_window.GetItems()
 azure_items = azure_config_window.GetItems()
 add_model_items = add_model_window.GetItems()
 msg_items = msgbox.GetItems()
@@ -644,10 +638,10 @@ def load_settings(settings_file):
 default_settings = {
     "AZURE_API_KEY":"",
     "AZURE_REGION":"",
-    "OPENAI_API_KEY": "",
     "PROVIDER":0,
-    "OPENAI_BASE_URL": "",
-    "OPENAI_MODEL": 0,
+    "OEPANI_FORMAT_BASE_URL": "",
+    "OEPANI_FORMAT_API_KEY": "",
+    "OPENAI_FORMAT_MODEL": 0,
     "TARGET_LANG":0,
     "CN":True,
     "EN":False,
@@ -661,17 +655,18 @@ custom_models = load_settings(custom_models_file)    # {"models": {disp: {...}}}
 
 for p in prov_manager.list():
     items["ProviderCombo"].AddItem(p)
-
-# 预装官方模型
-for disp ,info in custom_models.get("models", {}).items():
-    openai_items["OpenAIModelCombo"].AddItem(disp)
-
-
-# 加载用户自定义
-for disp ,info in custom_models.get("custom_models", {}).items():
-    openai_items["OpenAIModelCombo"].AddItem(disp)
+def update_openai_format_model_combo():
+    openai_items["OpenAIFormatModelCombo"].Clear()
+                # 预装官方模型
+    for disp ,info in custom_models.get("models", {}).items():
+        openai_items["OpenAIFormatModelCombo"].AddItem(disp)
 
 
+    # 加载用户自定义
+    for disp ,info in custom_models.get("custom_models", {}).items():
+        openai_items["OpenAIFormatModelCombo"].AddItem(disp)
+
+update_openai_format_model_combo()
 
 def switch_language(lang):
     """
@@ -723,14 +718,16 @@ win.On.LangEnCheckBox.Clicked = on_en_checkbox_clicked
 
 
 if saved_settings:
-    openai_items["OpenAIModelCombo"].CurrentIndex = saved_settings.get("OPENAI_MODEL", default_settings["OPENAI_MODEL"])
+    
     items["TargetLangCombo"].CurrentIndex = saved_settings.get("TARGET_LANG", default_settings["TARGET_LANG"])
     items["LangCnCheckBox"].Checked = saved_settings.get("CN", default_settings["CN"])
     items["LangEnCheckBox"].Checked = saved_settings.get("EN", default_settings["EN"])
     items["ProviderCombo"].CurrentIndex = saved_settings.get("PROVIDER", default_settings["PROVIDER"])
     azure_items["AzureApiKey"].Text = saved_settings.get("AZURE_API_KEY", default_settings["AZURE_API_KEY"])
     azure_items["AzureRegion"].Text = saved_settings.get("AZURE_REGION", default_settings["AZURE_REGION"])
-
+    openai_items["OpenAIFormatModelCombo"].CurrentIndex = saved_settings.get("OPENAI_FORMAT_MODEL", default_settings["OPENAI_FORMAT_MODEL"])
+    openai_items["OpenAIFormatBaseURL"].Text = saved_settings.get("OEPANI_FORMAT_BASE_URL", default_settings["OEPANI_FORMAT_BASE_URL"])
+    openai_items["OpenAIFormatApiKey"].Text = saved_settings.get("OEPANI_FORMAT_API_KEY", default_settings["OEPANI_FORMAT_API_KEY"])
 if items["LangEnCheckBox"].Checked :
     switch_language("en")
 else:
@@ -744,9 +741,10 @@ def close_and_save(settings_file):
         "PROVIDER":items["ProviderCombo"].CurrentIndex,
         "AZURE_API_KEY":azure_items["AzureApiKey"].Text,
         "AZURE_REGION":azure_items["AzureRegion"].Text,
-        "OPENAI_MODEL": openai_items["OpenAIModelCombo"].CurrentIndex,
+        "OPENAI_FORMAT_MODEL": openai_items["OpenAIFormatModelCombo"].CurrentIndex,
+        "OEPANI_FORMAT_BASE_URL": openai_items["OpenAIFormatBaseURL"].Text,
+        "OEPANI_FORMAT_API_KEY": openai_items["OpenAIFormatApiKey"].Text,
         "TARGET_LANG":items["TargetLangCombo"].CurrentIndex,
-
 
     }
 
@@ -757,14 +755,14 @@ def on_my_tabs_current_changed(ev):
 win.On.MyTabs.CurrentChanged = on_my_tabs_current_changed
 
 # --- 4.5 打开 OpenAI 配置窗 ---
-def on_show_openai(ev):
-    ai_config_window.Show()
-win.On.ShowAITranslator.Clicked = on_show_openai
+def on_show_openai_format(ev):
+    openai_format_config_window.Show()
+win.On.ShowOpenAIFormat.Clicked = on_show_openai_format
 
 def on_openai_close(ev):
     print("OpenAI Format API setup is complete.")
-    ai_config_window.Hide()
-ai_config_window.On.AITranslatorConfigWin.Close = on_openai_close
+    openai_format_config_window.Hide()
+openai_format_config_window.On.AITranslatorConfigWin.Close = on_openai_close
 
 
 # --- 4.6 打开 Azure 配置窗 ---
@@ -799,24 +797,12 @@ win.On.CopyrightButton.Clicked = on_open_link_button_clicked
 # --- 新增模型弹窗 ---
 def on_show_add_model(ev):
 
-    add_model_items["NewModelDisplay"].Text = ""
-    add_model_items["NewModelName"].Text    = ""
-    add_model_items["NewBaseURL"].Text      = ""
-    add_model_items["NewApiKey"].Text       = ""
-    ai_config_window.Hide()
+    add_model_items["addOpenAIFormatModelDisplay"].Text = ""
+    add_model_items["addOpenAIFormatModelName"].Text    = ""
+    openai_format_config_window.Hide()
     add_model_window.Show()
-ai_config_window.On.ShowAddModel.Clicked = on_show_add_model
+openai_format_config_window.On.ShowAddModel.Clicked = on_show_add_model
 
-def on_show_edit_model(ev):
-    disp = openai_items["OpenAIModelCombo"].CurrentText
-    info = custom_models.get("models", {}).get(disp, {})
-    add_model_items["NewModelDisplay"].Text = disp
-    add_model_items["NewModelName"].Text    = info.get("model", disp)
-    add_model_items["NewBaseURL"].Text      = info.get("base_url", "")
-    add_model_items["NewApiKey"].Text       = info.get("api_key", "")
-    ai_config_window.Hide()
-    add_model_window.Show()
-ai_config_window.On.ShowEditModel.Clicked = on_show_edit_model
 
 def verify_settings(base_url, api_key, model):
     payload = {
@@ -837,72 +823,76 @@ def verify_settings(base_url, api_key, model):
         return False, str(e)
 
 def on_verify_model(ev):
-    model = add_model_items["NewModelName"].Text.strip()
-    base = add_model_items["NewBaseURL"].Text.strip()
-    key = add_model_items["NewApiKey"].Text.strip()
-    ok, msg = verify_settings(base, key, model)
-    add_model_items["VerifyStatus"].Text = "OK" if ok else f"Failed: {msg}"
+    base_url = openai_items["OpenAIFormatBaseURL"].Text.strip()
+    model    = openai_items["OpenAIFormatModelName"].PlaceholderText.strip()
+    api_key  = openai_items["OpenAIFormatApiKey"].Text.strip()
+    ok,msg = verify_settings(base_url, api_key, model)
+    if ok :
+        show_warning_message(STATUS_MESSAGES.verify_success)
+    else :
+        show_warning_message(STATUS_MESSAGES.verify_failed)
+        print(msg)
+openai_format_config_window.On.VerifyModel.Clicked = on_verify_model
+
+def on_delete_model(ev):
+    display = openai_items["OpenAIFormatModelCombo"].CurrentText.strip()
+    custom_tbl = custom_models.setdefault("custom_models", {})
+    if display in custom_tbl:
+        del custom_tbl[display]
+        update_openai_format_model_combo()
+    else:
+        show_warning_message(STATUS_MESSAGES.model_deleted_failed)
+    save_settings(custom_models, custom_models_file)
+openai_format_config_window.On.DeleteModel.Clicked = on_delete_model
 
 def on_add_model(ev):
     # === 0 读取输入 ===
-    model    = add_model_items["NewModelName"].Text.strip()
-    display  = add_model_items["NewModelDisplay"].Text.strip() or model
-    base_url = add_model_items["NewBaseURL"].Text.strip()
-    api_key  = add_model_items["NewApiKey"].Text.strip()
-    if not (model or display or base_url or api_key):
-        add_model_items["VerifyStatus"].Text = "参数错误" # 或者使用 UI 元素显示错误
+    model   = add_model_items["addOpenAIFormatModelName"].Text.strip()
+    display = add_model_items["addOpenAIFormatModelDisplay"].Text.strip() or model
+
+    if not model:
+        show_warning_message(STATUS_MESSAGES.parameter_error)
         return
-    # === 1 取两张表的引用，若不存在先建空表 ===
-    models_tbl = custom_models.setdefault("models", {})          # 预装或已验证过的模型
-    custom_tbl = custom_models.setdefault("custom_models", {})   # 用户自定义
 
-    # === 2 先在两张表里查重：按「显示名」或「模型名」 ===
-    updated = False
-    for tbl in (models_tbl, custom_tbl):
-        # A. 显示名已存在
-        if display in tbl:
-            entry = tbl[display]
-        # B. 其它条目的 model 与输入 model 同名
-        elif any(v.get("model") == model for v in tbl.values()):
-            # 找到第一个匹配项并使用其 key
-            key = next(k for k, v in tbl.items() if v.get("model") == model)
-            entry = tbl[key]
-            display = key     # 统一使用已存在的显示名
-        else:
-            continue          # 本张表无匹配 → 下一张表
-        # 覆盖已存在字段（留空的不覆盖）
-        if model:    entry["model"]    = model
-        if base_url: entry["base_url"] = base_url
-        if api_key:  entry["api_key"]  = api_key
-        updated = True
+    # === 1 只操作 custom_models["custom_models"] ===
+    custom_tbl = custom_models.setdefault("custom_models", {})
 
-    # === 3 若两张表都未命中 → 视作新增 ===
-    if not updated:
-        custom_tbl[display] = {
-            "model":    model,
-            "base_url": base_url,
-            "api_key":  api_key,
-        }
-        # 只在真正新增时才插入下拉框，避免重复
-        openai_items["OpenAIModelCombo"].AddItem(display)
+    # === 2 查找重复 model ===
+    for old_disp, info in list(custom_tbl.items()):
+        if info.get("model") == model:
+            # 找到相同 model → 更新 display 名
+            if old_disp != display:
+                # 先搬移到新 key
+                custom_tbl[display] = info
+                # 再删除旧 key
+                del custom_tbl[old_disp]
+                # 更新下拉框：先移除旧项，再添加新项
+                update_openai_format_model_combo()
+            # 已处理完毕，直接保存返回
+            save_settings(custom_models, custom_models_file)
 
-    # === 4 持久化写回 ===
+            openai_format_config_window.Show()
+            add_model_window.Hide()
+            return
+
+    # === 3 未找到重复 model → 新增条目 ===
+    custom_tbl[display] = {"model": model}
+    openai_items["OpenAIFormatModelCombo"].AddItem(display)
+
+    # === 4 持久化并关闭窗口 ===
     save_settings(custom_models, custom_models_file)
-    # === 5 关闭当前窗口，回到主配置窗口 ===
-    ai_config_window.Show()
+    openai_format_config_window.Show()
     add_model_window.Hide()
 
-add_model_window.On.VerifyModel.Clicked = on_verify_model
 add_model_window.On.AddModelBtn.Clicked = on_add_model
 
 def on_openai_model_changed(ev):
     """
-    当 OpenAIModelCombo 选中项发生变化时，
+    当 OpenAIFormatModelCombo 选中项发生变化时，
     实时更新 NewModelName、NewBaseURL、NewApiKey 的显示内容。
     """
     # 1. 获取下拉框当前显示名
-    disp = openai_items["OpenAIModelCombo"].CurrentText
-    print(disp)
+    disp = openai_items["OpenAIFormatModelCombo"].CurrentText
 
     # 2. 从 custom_models 中查询：优先查“自定义”表，否则查“预装”表
     entry = (
@@ -912,17 +902,13 @@ def on_openai_model_changed(ev):
 
     # 3. 如果找到了 dict，就更新对应字段；否则清空或回退
     if isinstance(entry, dict):
-        openai_items["NewModelName"].PlaceholderText = entry.get("model", "")
-        openai_items["NewBaseURL"].PlaceholderText = entry.get("base_url", "")
-        openai_items["NewApiKey"].PlaceholderText  = entry.get("api_key", "")
+        openai_items["OpenAIFormatModelName"].PlaceholderText = entry.get("model", "")
     else:
         # 无配置时可清空，也可回退到默认
-        openai_items["NewModelName"].PlaceholderText = ""
-        openai_items["NewBaseURL"].PlaceholderText = ""
-        openai_items["NewApiKey"].PlaceholderText  = ""
+        openai_items["OpenAIFormatModelName"].PlaceholderText = ""
 
 # 4. 绑定事件：ComboBox 的 CurrentIndexChanged
-ai_config_window.On.OpenAIModelCombo.CurrentIndexChanged = on_openai_model_changed
+openai_format_config_window.On.OpenAIFormatModelCombo.CurrentIndexChanged = on_openai_model_changed
 # =============== 5  Resolve 辅助函数 ===============
 def connect_resolve():
     resolve = dvr_script.scriptapp("Resolve")
@@ -1060,31 +1046,25 @@ def on_trans_clicked(ev):
     target_lang_name = items["TargetLangCombo"].CurrentText
 
     # 2.1 如果是 AI_PROVIDER，再根据模型显示名决定真 model
-    if provider_name == AI_PROVIDER:
-        disp_model = openai_items["OpenAIModelCombo"].CurrentText
-        entry = (custom_models.get("custom_models", {}).get(disp_model)
-                 or custom_models.get("models", {}).get(disp_model))
-
-        if entry and isinstance(entry, dict):
-            # 从 JSON 取得
-            real_model = str(entry.get("model") or disp_model).strip()
-            base_url   = str(entry.get("base_url") or OPENAI_DEFAULT_URL).strip()
-            api_key    = str(entry.get("api_key") or OPENAI_DEFAULT_KEY).strip()
-        else:
-            # 内置模型 → 仍允许界面覆盖
-            real_model = OPENAI_DEFAULT_MODEL
-            base_url   = OPENAI_DEFAULT_URL
-            api_key    = OPENAI_DEFAULT_KEY
+    if provider_name == OPEN_AI_FORMAT_PROVIDER:
+        if not (openai_items["OpenAIFormatBaseURL"].Text and openai_items["OpenAIFormatApiKey"].Text):
+            show_warning_message(STATUS_MESSAGES.enter_api_key)
+        
+        model = openai_items["OpenAIFormatModelName"].PlaceholderText.strip()
+        base_url   = openai_items["OpenAIFormatBaseURL"].Text.strip()
+        api_key    = openai_items["OpenAIFormatApiKey"].Text.strip()
 
         # 更新 Provider 配置
-        prov_manager.update_cfg(AI_PROVIDER,
-            model   = real_model,
+        prov_manager.update_cfg(OPEN_AI_FORMAT_PROVIDER,
+            model   = model,
             base_url= base_url,
             api_key = api_key,
         )
-        provider     = prov_manager.get(AI_PROVIDER)
+        provider     = prov_manager.get(OPEN_AI_FORMAT_PROVIDER)
         target_code  = target_lang_name                 # AI 使用全称
     elif provider_name == AZURE_PROVIDER:
+        if not (azure_items["AzureApiKey"].Text and azure_items["AzureRegion"].Text):
+            show_warning_message(STATUS_MESSAGES.enter_api_key)
         prov_manager.update_cfg(AZURE_PROVIDER,
             api_key = azure_items["AzureApiKey"].Text.strip() or AZURE_DEFAULT_KEY,
             region  = azure_items["AzureRegion"].Text.strip() or AZURE_DEFAULT_REGION,
@@ -1153,13 +1133,13 @@ def on_close(ev):
 win.On.MyWin.Close = on_close
 
 def on_add_model_close(ev):
-    ai_config_window.Show()
+    openai_format_config_window.Show()
     add_model_window.Hide(); 
 add_model_window.On.AddModelWin.Close = on_add_model_close
 # =============== 9  运行 GUI ===============
 win.Show(); 
 dispatcher.RunLoop(); 
 win.Hide(); 
-ai_config_window.Hide()
+openai_format_config_window.Hide()
 azure_config_window.Hide()
 msgbox.Hide()

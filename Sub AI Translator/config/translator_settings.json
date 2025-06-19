@@ -1,9 +1,11 @@
 {
-    "CN": true,
-    "EN": false,
+    "CN": false,
+    "EN": true,
     "PROVIDER": 0,
     "AZURE_API_KEY": "",
     "AZURE_REGION": "",
-    "OPENAI_MODEL": 0,
+    "OPENAI_FORMAT_MODEL": 0,
+    "OEPANI_FORMAT_BASE_URL": "",
+    "OEPANI_FORMAT_API_KEY": "",
     "TARGET_LANG": 0
 }

@@ -3,5 +3,11 @@
   "nosub": ["No subtitles or subtitle track not activated.!", "没有字幕或未激活字幕轨道！"],
   "initialize":["Initializing…","初始化…"],
   "initialize_fault":["Initializing fault…","❌ 初始化失败…"],
-  "processing":["Tranlating...","翻译中…"]
+  "processing":["Tranlating...","翻译中…"],
+  "parameter_error":["Parameter error…","❌ 参数错误…"],
+  "model_deleted":["The model has beed deleted!","✅ 模型已删除！"],
+  "model_deleted_failed":["Can't delete system models!","❌ 无法删除默认模型！"],
+  "verify_success":["Verification Success!","✅ 验证成功"],
+  "verify_failed":["Verification Failed!","❌ 验证失败"],
+  "enter_api_key": ["Enter API key in the configuration panel.", "前往配置栏填写API密钥."]
 }
