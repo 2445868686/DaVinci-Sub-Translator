@@ -1,0 +1,7 @@
+{
+  "finished": ["Translate Finish!", "✅ 翻译完成！"],
+  "nosub": ["No subtitles or subtitle track not activated.!", "没有字幕或未激活字幕轨道！"],
+  "initialize":["Initializing…","初始化…"],
+  "initialize_fault":["Initializing fault…","❌ 初始化失败…"],
+  "processing":["Tranlating...","翻译中…"]
+}
