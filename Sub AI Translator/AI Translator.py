@@ -34,7 +34,7 @@ Note: For any content that should not be translated
 
 GOOGLE_PROVIDER = "Google"
 AZURE_PROVIDER  = "Microsoft (API Key)"
-OPEN_AI_FORMAT_PROVIDER     = "Open AI Format (API Key)"
+OPENAI_FORMAT_PROVIDER     = "Open AI Format (API Key)"
 
 AZURE_DEFAULT_KEY    = ""
 AZURE_DEFAULT_REGION = ""
@@ -200,8 +200,8 @@ class AzureProvider(BaseProvider):
                 time.sleep(2 ** attempt)
                 
 # -- AI Translator ------------------------
-class AITranslatorProvider(BaseProvider):
-    name = OPEN_AI_FORMAT_PROVIDER
+class OpenAIFormatProvider(BaseProvider):
+    name = OPENAI_FORMAT_PROVIDER
 
     def translate(self, text, target_lang, prefix: str = "", suffix: str = ""):
         """
@@ -302,8 +302,8 @@ PROVIDERS_CFG = {
             "max_retry": MAX_RETRY,
             "timeout":  15
         },
-        OPEN_AI_FORMAT_PROVIDER: {
-            "class": "AITranslatorProvider",
+        OPENAI_FORMAT_PROVIDER: {
+            "class": "OpenAIFormatProvider",
             "base_url": OPENAI_DEFAULT_URL,
             "api_key":  OPENAI_DEFAULT_KEY,
             "model":    OPENAI_DEFAULT_MODEL,
@@ -418,7 +418,7 @@ openai_format_config_window = dispatcher.AddWindow(
                     ui.LineEdit({"ID": "OpenAIFormatModelName", "ReadOnly":True, "Text": ""}),
                 ]),
                 ui.Label({"ID": "OpenAIFormatBaseURLLabel", "Text": "* Base URL"}),
-                ui.LineEdit({"ID": "OpenAIFormatBaseURL",  "Text": ""}),
+                ui.LineEdit({"ID": "OpenAIFormatBaseURL",  "Text": "","PlaceholderText":OPENAI_DEFAULT_URL}),
                 ui.Label({"ID": "OpenAIFormatApiKeyLabel", "Text": "* API Key"}),
                 ui.LineEdit({"ID": "OpenAIFormatApiKey", "Text": "",  "EchoMode": "Password"}),
                 ui.Label({"ID": "VerifyStatus", "Text": "", "Alignment": {"AlignHCenter": True}}),
@@ -471,7 +471,7 @@ add_model_window = dispatcher.AddWindow(
     {
         "ID": "AddModelWin",
         "WindowTitle": "Add Model",
-        "Geometry": [750, 400, 300, 400],
+        "Geometry": [750, 400, 300, 200],
         "Hidden": True,
         "StyleSheet": "*{font-size:14px;}"
     },
@@ -549,7 +549,7 @@ translations = {
         "DeleteModel":"删除模型",
         "AddModelTitle":"添加 OpenAI 兼容模型",
         "OpenAIFormatModelNameLabel":"* 模型",
-        "NewModelDisplayLabel":"名称",
+        "NewModelDisplayLabel":"显示名称",
         "AddModelBtn":"添加",
         
         
@@ -815,22 +815,43 @@ def verify_settings(base_url, api_key, model):
         "Content-Type": "application/json"
     }
     url = base_url.rstrip("/") + "/v1/chat/completions"
+
     try:
         r = requests.post(url, headers=headers, json=payload, timeout=10)
-        r.raise_for_status()
-        return True, ""
+        code = r.status_code            # 直接获取响应码
+        r.raise_for_status()            # 如果不是 2xx，会抛出 HTTPError
+        return True, "", code           # 成功时返回 True 和状态码
+    except requests.exceptions.HTTPError as e:
+        # HTTPError 中包含 .response，可以再提取状态码
+        return False, str(e), e.response.status_code
     except Exception as e:
-        return False, str(e)
+        # 其他网络错误（超时、连接失败等）
+        # e.response 可能为 None
+        code = getattr(e, 'response', None)
+        code = code.status_code if code else None
+        return False, str(e), code
 
 def on_verify_model(ev):
-    base_url = openai_items["OpenAIFormatBaseURL"].Text.strip()
+    base_url = openai_items["OpenAIFormatBaseURL"].Text.strip() or OPENAI_DEFAULT_URL
     model    = openai_items["OpenAIFormatModelName"].PlaceholderText.strip()
     api_key  = openai_items["OpenAIFormatApiKey"].Text.strip()
-    ok,msg = verify_settings(base_url, api_key, model)
+    ok,msg,code = verify_settings(base_url, api_key, model)
     if ok :
         show_warning_message(STATUS_MESSAGES.verify_success)
     else :
-        show_warning_message(STATUS_MESSAGES.verify_failed)
+        code_map = {
+            400: STATUS_MESSAGES.bad_request,
+            401: STATUS_MESSAGES.unauthorized,
+            403: STATUS_MESSAGES.forbidden,
+            404: STATUS_MESSAGES.not_found,
+            429: STATUS_MESSAGES.too_many_requests,
+            500: STATUS_MESSAGES.internal_server_error,
+            502: STATUS_MESSAGES.bad_gateway,
+            503: STATUS_MESSAGES.service_unavailable,
+            504: STATUS_MESSAGES.gateway_timeout,
+        }
+        # 用 dict.get 拿到对应消息，找不到就用 verify_code 兜底
+        show_warning_message(code_map.get(code, STATUS_MESSAGES.verify_code))
         print(msg)
 openai_format_config_window.On.VerifyModel.Clicked = on_verify_model
 
@@ -1014,7 +1035,7 @@ def translate_parallel(texts, provider, target_code,
     with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENCY) as pool:
         futures = {}
         for idx, t in enumerate(texts):
-            if isinstance(provider, AITranslatorProvider) and ctx_win>0:
+            if isinstance(provider, OpenAIFormatProvider) and ctx_win>0:
                 pre = "\n".join(texts[max(0, idx-ctx_win):idx])
                 suf = "\n".join(texts[idx+1: idx+1+ctx_win])
                 fut = pool.submit(provider.translate, t, target_code, pre, suf)
@@ -1046,21 +1067,21 @@ def on_trans_clicked(ev):
     target_lang_name = items["TargetLangCombo"].CurrentText
 
     # 2.1 如果是 AI_PROVIDER，再根据模型显示名决定真 model
-    if provider_name == OPEN_AI_FORMAT_PROVIDER:
+    if provider_name == OPENAI_FORMAT_PROVIDER:
         if not (openai_items["OpenAIFormatBaseURL"].Text and openai_items["OpenAIFormatApiKey"].Text):
             show_warning_message(STATUS_MESSAGES.enter_api_key)
         
         model = openai_items["OpenAIFormatModelName"].PlaceholderText.strip()
-        base_url   = openai_items["OpenAIFormatBaseURL"].Text.strip()
+        base_url   = openai_items["OpenAIFormatBaseURL"].Text.strip() or OPENAI_DEFAULT_URL
         api_key    = openai_items["OpenAIFormatApiKey"].Text.strip()
 
         # 更新 Provider 配置
-        prov_manager.update_cfg(OPEN_AI_FORMAT_PROVIDER,
+        prov_manager.update_cfg(OPENAI_FORMAT_PROVIDER,
             model   = model,
             base_url= base_url,
             api_key = api_key,
         )
-        provider     = prov_manager.get(OPEN_AI_FORMAT_PROVIDER)
+        provider     = prov_manager.get(OPENAI_FORMAT_PROVIDER)
         target_code  = target_lang_name                 # AI 使用全称
     elif provider_name == AZURE_PROVIDER:
         if not (azure_items["AzureApiKey"].Text and azure_items["AzureRegion"].Text):
@@ -1083,7 +1104,28 @@ def on_trans_clicked(ev):
     show_warning_message(STATUS_MESSAGES.initialize)
     try:
         first_result = provider.initialize(subs[0]["text"], target_code)
+    except requests.exceptions.HTTPError as e:
+        # 拿到 HTTP 响应码
+        code = e.response.status_code if e.response is not None else None
+        # 状态码到 STATUS_MESSAGES 的映射
+        code_map = {
+            400: STATUS_MESSAGES.bad_request,
+            401: STATUS_MESSAGES.unauthorized,
+            403: STATUS_MESSAGES.forbidden,
+            404: STATUS_MESSAGES.not_found,
+            429: STATUS_MESSAGES.too_many_requests,
+            500: STATUS_MESSAGES.internal_server_error,
+            502: STATUS_MESSAGES.bad_gateway,
+            503: STATUS_MESSAGES.service_unavailable,
+            504: STATUS_MESSAGES.gateway_timeout,
+        }
+        # 显示对应的提示，找不到就用 initialize_fault
+        show_warning_message(code_map.get(code, STATUS_MESSAGES.initialize_fault))
+        print(f"初始化失败，HTTP状态码：{code}，异常：{e}")
+        items["TransButton"].Enabled = True
+        return
     except Exception as e:
+        # 其它错误
         show_warning_message(STATUS_MESSAGES.initialize_fault)
         print(f"初始化失败，异常原因：{e}")
         items["TransButton"].Enabled = True
