@@ -10,7 +10,7 @@ set "TARGET_DIR=C:\ProgramData\Blackmagic Design\DaVinci Resolve\Fusion\HB\Trans
 
 :: 将所有需要安装的包放在一个变量里
 :: 新增了 setuptools 和 wheel，它们是安装源代码包所必需的构建工具
-set "PACKAGES=googletrans==4.0.0-rc1 requests setuptools wheel"
+set "PACKAGES=requests deep_translator"
 
 :: 指定使用的镜像源
 set "PIP_MIRROR=-i https://pypi.tuna.tsinghua.edu.cn/simple"
