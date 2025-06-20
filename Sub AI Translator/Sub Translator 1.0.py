@@ -208,45 +208,44 @@ class AzureProvider(BaseProvider):
                 
 # -- AI Translator ------------------------
 class OpenAIFormatProvider(BaseProvider):
-    _session = requests.Session() 
+    _session = requests.Session()
     name = OPENAI_FORMAT_PROVIDER
 
     def translate(self, text, target_lang, prefix: str = "", suffix: str = ""):
         """
-        text   : 当前待译行
-        prefix : 上下文前文（可为空）
-        suffix : 上下文后文（可为空）
+        返回: (翻译文本, usage dict)
+        usage 包含 'prompt_tokens', 'completion_tokens', 'total_tokens'
         """
         prompt_content = SYSTEM_PROMPT.format(target_lang=target_lang)
 
         messages = [{"role": "system", "content": prompt_content}]
-        context = "\n".join(filter(None, [prefix, suffix]))
-        messages.append({"role": "assistant", "content": context})
-        messages.append({
-            "role": "user",
-            "content": f"<<< Sentence >>>\n{text}"
-        })
+        # 上下文
+        ctx = "\n".join(filter(None, [prefix, suffix]))
+        if ctx:
+            messages.append({"role": "assistant", "content": ctx})
+        messages.append({"role": "user", "content": f"<<< Sentence >>>\n{text}"})
 
         payload = {
-            "model": self.cfg["model"],
-            "messages": messages,
+            "model":       self.cfg["model"],
+            "messages":    messages,
             "temperature": 0,
         }
-
         headers = {
             "Authorization": f"Bearer {self.cfg['api_key']}",
-            "Content-Type": "application/json"
+            "Content-Type":  "application/json",
         }
         url = self.cfg["base_url"].rstrip("/") + "/v1/chat/completions"
 
-        # ---------- 3 带指数退避的重试 ----------
         for attempt in range(1, self.cfg.get("max_retry", 3) + 1):
             try:
                 r = self._session.post(url, headers=headers, json=payload,
-                                        timeout=self.cfg.get("timeout", 30))
+                                       timeout=self.cfg.get("timeout", 30))
                 r.raise_for_status()
-                return r.json()["choices"][0]["message"]["content"].strip()
-            except Exception as e:
+                resp = r.json()
+                text_out = resp["choices"][0]["message"]["content"].strip()
+                usage    = resp.get("usage", {})
+                return text_out, usage
+            except Exception:
                 if attempt == self.cfg.get("max_retry", 3):
                     raise
                 time.sleep(2 ** attempt)
@@ -523,6 +522,13 @@ def show_warning_message(status_tuple):
     message = status_tuple[0] if use_english else status_tuple[1]
     msgbox.Show()
     msg_items["WarningLabel"].Text = message
+
+def show_dynamic_message(en_text, zh_text):
+    """直接弹窗显示任意中英文文本的动态消息"""
+    use_en = items["LangEnCheckBox"].Checked
+    msg = en_text if use_en else zh_text
+    msgbox.Show()
+    msg_items["WarningLabel"].Text = msg
 
 def on_msg_close(ev):
     msgbox.Hide()
@@ -1036,26 +1042,42 @@ def import_srt_to_first_empty(path):
 def translate_parallel(texts, provider, target_code,
                        status_label=None, ctx_win=CONTEXT_WINDOW):
     total, done = len(texts), 0
-    result = [None]*total
+    result = [None] * total
+    total_tokens = 0
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENCY) as pool:
         futures = {}
         for idx, t in enumerate(texts):
-            if isinstance(provider, OpenAIFormatProvider) and ctx_win>0:
+            if isinstance(provider, OpenAIFormatProvider) and ctx_win > 0:
                 pre = "\n".join(texts[max(0, idx-ctx_win):idx])
                 suf = "\n".join(texts[idx+1: idx+1+ctx_win])
                 fut = pool.submit(provider.translate, t, target_code, pre, suf)
             else:
                 fut = pool.submit(provider.translate, t, target_code)
             futures[fut] = idx
+
         for f in concurrent.futures.as_completed(futures):
             i = futures[f]
-            try: result[i] = f.result()
-            except Exception as e: result[i] = f"[失败:{e}]"
+            try:
+                res = f.result()
+                # 只有真正返回 tuple 才统计 token
+                if isinstance(res, tuple):
+                    text_i, usage = res
+                    tokens = usage.get("total_tokens", 0)
+                else:
+                    text_i, tokens = res, 0
+                result[i] = text_i
+                total_tokens += tokens
+            except Exception as e:
+                result[i] = f"[失败: {e}]"
             done += 1
+
             if status_label:
-                pct = int(done/total*100)
-                status_label.Text = f"Start translating...... {pct}% ({done}/{total})"
-    return result
+                pct = int(done / total * 100)
+                en = f"Start translating... {pct}% ({done}/{total})  Tokens used: {total_tokens}"
+                zh = f"开始翻译... {pct}% （{done}/{total}）  已消耗令牌：{total_tokens}"
+                show_dynamic_message(en, zh)
+    return result,total_tokens
 
 
 # =============== 主按钮逻辑（核心差异处 ★★★） ===============
@@ -1135,19 +1157,13 @@ def on_trans_clicked(ev):
         print(f"初始化失败，异常原因：{e}")
         items["TransButton"].Enabled = True
         return
-    msgbox.Hide()
-    items["StatusLabel"].Text = "Start translating...... 0% (0/{})".format(len(subs))
-
-    translated = [first_result] if first_result is not None else []
-    if len(subs) > 1:
-        pct = int(1/len(subs)*100)
-        items["StatusLabel"].Text = f"Start translating...... {pct}% (1/{len(subs)})"
-        rest = translate_parallel(
-            [s["text"] for s in subs[1:]], provider, target_code, items["StatusLabel"]
-        )
-        translated.extend(rest)
-    else:
-        items["StatusLabel"].Text = "Start translating...... 100% (1/1)"
+    # 4. 并发翻译，translate_parallel 会从 0 开始统计 token
+    show_dynamic_message(
+        f"Start translating... 0% (0/{len(subs)})",
+        f"开始翻译... 0% （0/{len(subs)}）"
+    )
+    texts      = [s["text"] for s in subs]
+    translated,total_tokens = translate_parallel(texts, provider, target_code, status_label=items["StatusLabel"])
 
     for s, new_txt in zip(subs, translated):
         s["text"] = new_txt
@@ -1156,8 +1172,9 @@ def on_trans_clicked(ev):
     srt_path = write_srt(subs, tl.GetStartFrame(), fps,
                          tl.GetName(), target_code, output_dir=srt_dir)
     if import_srt_to_first_empty(srt_path):
-        show_warning_message(STATUS_MESSAGES.finished)
-        items["StatusLabel"].Text = ""
+        en = f"✅ Finished! 100% （{len(subs)}/{len(subs)}）  Tokens used:{total_tokens}"
+        zh = f"✅ 翻译完成！ 100% （{len(subs)}/{len(subs)}）  已消耗Tokens：{total_tokens}"
+        show_dynamic_message(en,zh)
     else:
         items["StatusLabel"].Text = "⚠️ 导入失败！"
 
