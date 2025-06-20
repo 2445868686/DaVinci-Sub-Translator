@@ -1,11 +1,11 @@
 {
-    "CN": false,
-    "EN": true,
+    "CN": true,
+    "EN": false,
     "PROVIDER": 0,
-    "AZURE_API_KEY": "",
-    "AZURE_REGION": "",
-    "OPENAI_FORMAT_MODEL": 0,
-    "OEPANI_FORMAT_BASE_URL": "",
-    "OEPANI_FORMAT_API_KEY": "",
+    "AZURE_API_KEY": "BhD5f8aAsNRsVdYYschy54sGdVPGqwKEiOsebzZbRS6u5WUqTIl0JQQJ99BFACYeBjFXJ3w3AAAbACOGdZI3",
+    "AZURE_REGION": "eastus",
+    "OPENAI_FORMAT_MODEL": 4,
+    "OEPANI_FORMAT_BASE_URL": "https://yunwu.ai/",
+    "OEPANI_FORMAT_API_KEY": "sk-wLP8n2FczZrYukonSvbozSba4HyV4cBHstEPDACv8aeI6QFH",
     "TARGET_LANG": 0
 }
