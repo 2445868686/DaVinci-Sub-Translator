@@ -18,10 +18,22 @@ CONCURRENCY = 10
 MAX_RETRY   = 3
 TIMEOUT     = 30
 
-OPENAI_DEFAULT_KEY   = ""
-OPENAI_DEFAULT_URL   = "https://api.openai.com"
-OPENAI_DEFAULT_MODEL = "gpt-4o-mini"
+OEPANI_FORMAT_API_KEY   = ""
+OEPANI_FORMAT_BASE_URL   = "https://api.openai.com"
+OPENAI_FORMAT_MODEL = "gpt-4o-mini"
+OPENAI_DEFAULT_TEMPERATURE = 0.3
 
+
+GOOGLE_PROVIDER = "Google"
+AZURE_PROVIDER  = "Microsoft (API Key)"
+DEEPL_PROVIDER = "DeepL (API Key)"
+OPENAI_FORMAT_PROVIDER     = "Open AI Format (API Key)"
+
+AZURE_DEFAULT_KEY    = ""
+AZURE_DEFAULT_REGION = ""
+AZURE_DEFAULT_URL    = "https://api.cognitive.microsofttranslator.com"
+PROVIDER             = 0
+DEEPL_DEFAULT_KEY    = ""
 CONTEXT_WINDOW = 1
 SYSTEM_PROMPT = """
 You are a professional subtitle translation engine.
@@ -37,15 +49,6 @@ Note:
 - The messages with role=assistant are only CONTEXT; do NOT translate them or include them in your output.
 - Translate ONLY the line after <<< Sentence >>>.
 """
-
-
-GOOGLE_PROVIDER = "Google"
-AZURE_PROVIDER  = "Microsoft (API Key)"
-OPENAI_FORMAT_PROVIDER     = "Open AI Format (API Key)"
-
-AZURE_DEFAULT_KEY    = ""
-AZURE_DEFAULT_REGION = ""
-AZURE_DEFAULT_URL    = "https://api.cognitive.microsofttranslator.com"
 
 # --------------------------------------------
 # 语言映射
@@ -75,6 +78,7 @@ import string
 try:
     import requests
     from deep_translator import GoogleTranslator
+    from deep_translator import DeeplTranslator
 except ImportError:
     # 1. 获取脚本所在目录（备用）
     script_path = os.path.dirname(os.path.abspath(sys.argv[0]))
@@ -124,6 +128,7 @@ except ImportError:
     try:
         import requests
         from deep_translator import GoogleTranslator
+        from deep_translator import DeeplTranslator
         print(lib_dir)
     except ImportError as e:
         print("依赖导入失败，请确保所有依赖已打包至 Lib 目录中：", lib_dir, "\n错误信息：", e)
@@ -205,7 +210,23 @@ class AzureProvider(BaseProvider):
                 if attempt == self.cfg.get("max_retry", 3):
                     raise
                 time.sleep(2 ** attempt)
-                
+# -- DeepL ------------------------                
+class DeepLProvider(BaseProvider):
+    name = DEEPL_PROVIDER
+
+    def translate(self, text, target_lang):
+        for attempt in range(1, self.cfg.get("max_retry", 3) + 1):
+            try:
+                translator = DeeplTranslator(
+                    source='auto',
+                    target=target_lang,
+                    api_key=self.cfg.get("api_key", "")
+                )
+                return translator.translate(text)
+            except Exception:
+                if attempt == self.cfg.get("max_retry", 3):
+                    raise
+                time.sleep(2 ** attempt)
 # -- AI Translator ------------------------
 class OpenAIFormatProvider(BaseProvider):
     _session = requests.Session()
@@ -228,7 +249,7 @@ class OpenAIFormatProvider(BaseProvider):
         payload = {
             "model":       self.cfg["model"],
             "messages":    messages,
-            "temperature": 0,
+            "temperature": self.cfg["temperature"],
         }
         headers = {
             "Authorization": f"Bearer {self.cfg['api_key']}",
@@ -295,11 +316,18 @@ PROVIDERS_CFG = {
             "max_retry": MAX_RETRY,
             "timeout":  15
         },
+        DEEPL_PROVIDER: {
+            "class":   "DeepLProvider",
+            "api_key": "",          
+            "max_retry": MAX_RETRY,
+            "timeout":  15,
+        },
         OPENAI_FORMAT_PROVIDER: {
             "class": "OpenAIFormatProvider",
-            "base_url": OPENAI_DEFAULT_URL,
-            "api_key":  OPENAI_DEFAULT_KEY,
-            "model":    OPENAI_DEFAULT_MODEL,
+            "base_url": OEPANI_FORMAT_BASE_URL,
+            "api_key":  OEPANI_FORMAT_API_KEY,
+            "model":    OPENAI_FORMAT_MODEL,
+            "temperature":OPENAI_DEFAULT_TEMPERATURE,
             "max_retry": MAX_RETRY,
             "timeout":  TIMEOUT
         },
@@ -369,6 +397,10 @@ win = dispatcher.AddWindow(
                         ui.Label({"ID":"MicrosoftConfigLabel","Text": "Microsoft", "Alignment": {"AlignLeft": True}, "Weight": 0.1}),
                         ui.Button({"ID": "ShowAzure", "Text": "配置","Weight": 0.1,}),
                     ]),
+                    ui.HGroup({"Weight":0.1}, [
+                        ui.Label({"ID":"DeepLConfigLabel","Text":"DeepL","Weight":0.1}),
+                        ui.Button({"ID":"ShowDeepL","Text":"配置","Weight":0.1}),
+                    ]),
                     ui.HGroup({"Weight":0.1},[
                         ui.Label({"ID":"OpenAIFormatConfigLabel","Text":"OpenAI Format","Weight":0.1}),
                         ui.Button({"ID":"ShowOpenAIFormat","Text":"配置","Weight":0.1}),
@@ -421,9 +453,13 @@ openai_format_config_window = dispatcher.AddWindow(
                     ui.LineEdit({"ID": "OpenAIFormatModelName", "ReadOnly":True, "Text": ""}),
                 ]),
                 ui.Label({"ID": "OpenAIFormatBaseURLLabel", "Text": "* Base URL"}),
-                ui.LineEdit({"ID": "OpenAIFormatBaseURL",  "Text": "","PlaceholderText":OPENAI_DEFAULT_URL}),
+                ui.LineEdit({"ID": "OpenAIFormatBaseURL",  "Text": "","PlaceholderText":OEPANI_FORMAT_BASE_URL}),
                 ui.Label({"ID": "OpenAIFormatApiKeyLabel", "Text": "* API Key"}),
                 ui.LineEdit({"ID": "OpenAIFormatApiKey", "Text": "",  "EchoMode": "Password"}),
+                ui.HGroup({"Weight": 0.2}, [
+                    ui.Label({"ID": "OpenAIFormatTemperatureLabel", "Text": "* Temperature"}),
+                ui.DoubleSpinBox({"ID": "OpenAIFormatTemperatureSpinBox", "Value": 0.3, "Minimum": 0.0, "Maximum": 1.0, "SingleStep": 0.01, "Weight": 1})
+                ]),
                 ui.HGroup({"Weight": 0.2}, [
                     ui.Button({"ID": "VerifyModel", "Text": "验证","Weight": 1}),
                     ui.Button({"ID": "ShowAddModel", "Text": "新增模型","Weight": 1}),
@@ -469,6 +505,30 @@ azure_config_window = dispatcher.AddWindow(
                 
             ]
         )
+    ]
+)
+deepL_config_window = dispatcher.AddWindow(
+    {
+        "ID": "DeepLConfigWin",
+        "WindowTitle": "DeepL API",
+        "Geometry": [780, 420, 350, 160],
+        "Hidden": True,
+        "StyleSheet": "*{font-size:14px;}"
+    },
+    [
+        ui.VGroup([
+            ui.Label({"ID":"DeepLLabel","Text":"DeepL API Key","Alignment":{"AlignHCenter":True}}),
+            ui.HGroup({"Weight": 1}, [
+                    ui.Label({"ID": "DeepLApiKeyLabel", "Text": "密钥", "Alignment": {"AlignRight": False}, "Weight": 0.2}),
+                    ui.LineEdit({"ID":"DeepLApiKey","Text":"","EchoMode":"Password","Weight":0.8}),
+                    
+                ]),
+            
+            ui.HGroup([
+                ui.Button({"ID":"DeepLConfirm","Text":"确定","Weight":1}),
+                ui.Button({"ID":"DeepLRegister","Text":"注册","Weight":1}),
+            ])
+        ])
     ]
 )
 add_model_window = dispatcher.AddWindow(
@@ -549,6 +609,12 @@ translations = {
         "MoreScriptLabel":"\n———————更多功能———————",
         "TTSButton":"文字转语音（TTS）插件",
         "ProviderLabel":"服务商",
+        "DeepLConfigLabel":"DeepL",
+        "ShowDeepL":"配置",
+        "DeepLLabel":"DeepL API",
+        "DeepLApiKeyLabel":"密钥",
+        "DeepLConfirm":"确定",
+        "DeepLRegister":"注册",
         "AzureRegionLabel":"区域",
         "AzureApiKeyLabel":"密钥",
         "AzureConfirm":"确定",
@@ -578,6 +644,12 @@ translations = {
         "MoreScriptLabel":"\n—————MORE FEATURES—————",
         "TTSButton":"Text to Speech (TTS) Script",
         "ProviderLabel":"Provider",
+        "DeepLConfigLabel":"DeepL",
+        "ShowDeepL":"Config",
+        "DeepLLabel":"DeepL API",
+        "DeepLApiKeyLabel":"Key",
+        "DeepLConfirm":"OK",
+        "DeepLRegister":"Sign-up",
         "AzureRegionLabel":"Region",
         "AzureApiKeyLabel":"Key",
         "AzureConfirm":"OK",
@@ -599,6 +671,7 @@ translations = {
 items       = win.GetItems()
 openai_items = openai_format_config_window.GetItems()
 azure_items = azure_config_window.GetItems()
+deepL_items = deepL_config_window.GetItems()
 add_model_items = add_model_window.GetItems()
 msg_items = msgbox.GetItems()
 items["MyStack"].CurrentIndex = 0
@@ -647,12 +720,15 @@ def load_settings(settings_file):
     return None
 
 default_settings = {
-    "AZURE_API_KEY":"",
-    "AZURE_REGION":"",
+    "AZURE_DEFAULT_KEY":"",
+    "AZURE_DEFAULT_REGION":"",
+    "DEEPL_DEFAULT_KEY":"",
     "PROVIDER":0,
     "OEPANI_FORMAT_BASE_URL": "",
     "OEPANI_FORMAT_API_KEY": "",
     "OPENAI_FORMAT_MODEL": 0,
+    "OEPANI_FORMAT_TEMPERATURE":0.3,
+  
     "TARGET_LANG":0,
     "CN":True,
     "EN":False,
@@ -697,6 +773,8 @@ def switch_language(lang):
             azure_items[item_id].Text = text_value
         elif item_id in openai_items:    
             openai_items[item_id].Text = text_value
+        elif item_id in deepL_items:    
+            deepL_items[item_id].Text = text_value
         elif item_id in add_model_items:    
             add_model_items[item_id].Text = text_value
         else:
@@ -734,11 +812,13 @@ if saved_settings:
     items["LangCnCheckBox"].Checked = saved_settings.get("CN", default_settings["CN"])
     items["LangEnCheckBox"].Checked = saved_settings.get("EN", default_settings["EN"])
     items["ProviderCombo"].CurrentIndex = saved_settings.get("PROVIDER", default_settings["PROVIDER"])
-    azure_items["AzureApiKey"].Text = saved_settings.get("AZURE_API_KEY", default_settings["AZURE_API_KEY"])
-    azure_items["AzureRegion"].Text = saved_settings.get("AZURE_REGION", default_settings["AZURE_REGION"])
+    azure_items["AzureApiKey"].Text = saved_settings.get("AZURE_DEFAULT_KEY", default_settings["AZURE_DEFAULT_KEY"])
+    azure_items["AzureRegion"].Text = saved_settings.get("AZURE_DEFAULT_REGION", default_settings["AZURE_DEFAULT_REGION"])
+    deepL_items["DeepLApiKey"].Text = saved_settings.get("DEEPL_DEFAULT_KEY",default_settings["DEEPL_DEFAULT_KEY"])
     openai_items["OpenAIFormatModelCombo"].CurrentIndex = saved_settings.get("OPENAI_FORMAT_MODEL", default_settings["OPENAI_FORMAT_MODEL"])
     openai_items["OpenAIFormatBaseURL"].Text = saved_settings.get("OEPANI_FORMAT_BASE_URL", default_settings["OEPANI_FORMAT_BASE_URL"])
     openai_items["OpenAIFormatApiKey"].Text = saved_settings.get("OEPANI_FORMAT_API_KEY", default_settings["OEPANI_FORMAT_API_KEY"])
+    openai_items["OpenAIFormatTemperatureSpinBox"].Value = saved_settings.get("OEPANI_FORMAT_TEMPERATURE", default_settings["OEPANI_FORMAT_TEMPERATURE"])
 if items["LangEnCheckBox"].Checked :
     switch_language("en")
 else:
@@ -750,11 +830,13 @@ def close_and_save(settings_file):
         "CN":items["LangCnCheckBox"].Checked,
         "EN":items["LangEnCheckBox"].Checked,
         "PROVIDER":items["ProviderCombo"].CurrentIndex,
-        "AZURE_API_KEY":azure_items["AzureApiKey"].Text,
-        "AZURE_REGION":azure_items["AzureRegion"].Text,
+        "AZURE_DEFAULT_KEY":azure_items["AzureApiKey"].Text,
+        "AZURE_DEFAULT_REGION":azure_items["AzureRegion"].Text,
+        "DEEPL_DEFAULT_KEY":deepL_items["DeepLApiKey"].Text,
         "OPENAI_FORMAT_MODEL": openai_items["OpenAIFormatModelCombo"].CurrentIndex,
         "OEPANI_FORMAT_BASE_URL": openai_items["OpenAIFormatBaseURL"].Text,
         "OEPANI_FORMAT_API_KEY": openai_items["OpenAIFormatApiKey"].Text,
+        "OEPANI_FORMAT_TEMPERATURE": openai_items["OpenAIFormatTemperatureSpinBox"].Value,
         "TARGET_LANG":items["TargetLangCombo"].CurrentIndex,
 
     }
@@ -790,6 +872,24 @@ azure_config_window.On.AzureConfigWin.Close = on_azure_close
 def on_azure_register_link_button_clicked(ev):
     ...
 azure_config_window.On.AzureRegisterButton.Clicked = on_azure_register_link_button_clicked
+
+def on_show_deepl(ev):
+    deepL_config_window.Show()
+win.On.ShowDeepL.Clicked = on_show_deepl
+
+def on_deepl_close(ev):
+    # 关闭窗口 & 写入 ProviderManager
+    prov_manager.update_cfg(
+        DEEPL_PROVIDER,
+        api_key = deepL_items["DeepLApiKey"].Text.strip()
+    )
+    deepL_config_window.Hide()
+deepL_config_window.On.DeepLConfirm.Clicked = on_deepl_close
+deepL_config_window.On.DeepLConfigWin.Close = on_deepl_close
+
+def on_deepl_register(ev):
+    webbrowser.open("https://www.deepl.com/account/summary")   # 官网注册页
+deepL_config_window.On.DeepLRegister.Clicked = on_deepl_register
 
 def on_tts_button(ev):
     if items["LangEnCheckBox"].Checked :
@@ -843,7 +943,7 @@ def verify_settings(base_url, api_key, model):
         return False, str(e), code
 
 def on_verify_model(ev):
-    base_url = openai_items["OpenAIFormatBaseURL"].Text.strip() or OPENAI_DEFAULT_URL
+    base_url = openai_items["OpenAIFormatBaseURL"].Text.strip() or OEPANI_FORMAT_BASE_URL
     model    = openai_items["OpenAIFormatModelName"].PlaceholderText.strip()
     api_key  = openai_items["OpenAIFormatApiKey"].Text.strip()
     ok,msg,code = verify_settings(base_url, api_key, model)
@@ -1017,26 +1117,56 @@ def write_srt(subs, start_frame, fps, timeline_name, lang_code, output_dir="."):
     return path
 
 def import_srt_to_first_empty(path):
-    resolve, current_project,current_media_pool,current_root_folder, current_timeline, fps = connect_resolve()
-    if not current_timeline: return False
+    resolve, current_project, current_media_pool, current_root_folder, current_timeline, fps = connect_resolve()
+    if not current_timeline:
+        return False
+
     # 1. 禁用所有现有字幕轨
     states = {}
-    for i in range(1, current_timeline.GetTrackCount("subtitle")+1):
+    for i in range(1, current_timeline.GetTrackCount("subtitle") + 1):
         states[i] = current_timeline.GetIsTrackEnabled("subtitle", i)
-        if states[i]: current_timeline.SetTrackEnable("subtitle", i, False)
+        if states[i]:
+            current_timeline.SetTrackEnable("subtitle", i, False)
+
     # 2. 找第一条空轨，没有就新建
-    target = next((i for i in range(1, current_timeline.GetTrackCount("subtitle")+1)
-                   if not current_timeline.GetItemListInTrack("subtitle", i)), None)
+    target = next(
+        (i for i in range(1, current_timeline.GetTrackCount("subtitle") + 1)
+         if not current_timeline.GetItemListInTrack("subtitle", i)),
+        None
+    )
     if target is None:
         current_timeline.AddTrack("subtitle")
         target = current_timeline.GetTrackCount("subtitle")
     current_timeline.SetTrackEnable("subtitle", target, True)
-    # 3. 导入
-    current_media_pool.SetCurrentFolder(current_root_folder)
+
+    # —— 新增部分：在根目录下创建 / 获取 srt 子文件夹 —— #
+    # 3. 检查是否已存在名为 "srt" 的子文件夹
+    srt_folder = None
+    for folder in current_root_folder.GetSubFolderList():
+        if folder.GetName() == "srt":
+            srt_folder = folder
+            break
+    # 4. 如果不存在，就创建一个
+    if srt_folder is None:
+        srt_folder = current_media_pool.AddSubFolder(current_root_folder, "srt")
+
+    # 5. 切换到 srt 文件夹
+    current_media_pool.SetCurrentFolder(srt_folder)
+
+    # —— 导入并追加到轨道 —— #
+    # 6. 导入 SRT 文件
     current_media_pool.ImportMedia([path])
-    current_media_pool.AppendToTimeline([current_root_folder.GetClipList()[-1]])
-    print("🎉 The subtitles were inserted into track #", target)
+
+    # 7. 从 srt_folder 中获取最新导入的剪辑
+    clips = srt_folder.GetClipList()
+    latest_clip = clips[-1]  # 列表最后一个即刚导入的
+
+    # 8. 追加到时间线
+    current_media_pool.AppendToTimeline([latest_clip])
+
+    print("🎉 The subtitles were inserted into folder 'srt' and track #", target)
     return True
+
 
 # =============== 并发翻译封装 ===============
 def translate_parallel(texts, provider, target_code,
@@ -1099,14 +1229,15 @@ def on_trans_clicked(ev):
             show_warning_message(STATUS_MESSAGES.enter_api_key)
         
         model = openai_items["OpenAIFormatModelName"].PlaceholderText.strip()
-        base_url   = openai_items["OpenAIFormatBaseURL"].Text.strip() or OPENAI_DEFAULT_URL
+        base_url   = openai_items["OpenAIFormatBaseURL"].Text.strip() or OEPANI_FORMAT_BASE_URL
         api_key    = openai_items["OpenAIFormatApiKey"].Text.strip()
-
+        temperature = openai_items["OpenAIFormatTemperatureSpinBox"].Value
         # 更新 Provider 配置
         prov_manager.update_cfg(OPENAI_FORMAT_PROVIDER,
             model   = model,
             base_url= base_url,
             api_key = api_key,
+            temperature = temperature
         )
         provider     = prov_manager.get(OPENAI_FORMAT_PROVIDER)
         target_code  = target_lang_name                 # AI 使用全称
@@ -1122,6 +1253,15 @@ def on_trans_clicked(ev):
     elif provider_name == GOOGLE_PROVIDER:
         provider = prov_manager.get(GOOGLE_PROVIDER)
         target_code = GOOGLE_LANG_CODE_MAP[target_lang_name]
+    elif provider_name == DEEPL_PROVIDER:
+        if not deepL_items["DeepLApiKey"].Text:
+            show_warning_message(STATUS_MESSAGES.enter_api_key)
+        prov_manager.update_cfg(
+            DEEPL_PROVIDER,
+            api_key = deepL_items["DeepLApiKey"].Text.strip()
+        )
+        provider = prov_manager.get(DEEPL_PROVIDER)
+        target_code = GOOGLE_LANG_CODE_MAP[target_lang_name]   # 复用 Google 代码表
     else:
         items["StatusLabel"].Text = "❌ 未识别的服务商"
         return

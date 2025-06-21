@@ -2,10 +2,12 @@
     "CN": false,
     "EN": true,
     "PROVIDER": 0,
-    "AZURE_API_KEY": "",
-    "AZURE_REGION": "",
+    "AZURE_DEFAULT_KEY": "",
+    "AZURE_DEFAULT_REGION": "",
+    "DEEPL_DEFAULT_KEY": "",
     "OPENAI_FORMAT_MODEL": 0,
     "OEPANI_FORMAT_BASE_URL": "",
     "OEPANI_FORMAT_API_KEY": "",
+    "OEPANI_FORMAT_TEMPERATURE": 0.3,
     "TARGET_LANG": 0
 }
