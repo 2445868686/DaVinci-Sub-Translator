@@ -28,14 +28,26 @@ if not exist "%TARGET_DIR%" mkdir "%TARGET_DIR%"
 echo [2/4] Purging pip cache...
 "%PYTHON%" -m pip cache purge --disable-pip-version-check >nul 2>&1
 
-:: 3. 从镜像下载所有包及其依赖项
-echo [3/4] Downloading all packages from mirror: %PACKAGES%
+:: 3. 下载所有包及依赖：优先尝试官方源，失败再用镜像
+echo [3/4] Attempting download from official PyPI...
 "%PYTHON%" -m pip download %PACKAGES% ^
 --dest "%WHEEL_DIR%" ^
---no-cache-dir %PIP_MIRROR%
+--no-cache-dir ^
+-i https://pypi.org/simple
 if errorlevel 1 (
-echo [ERROR] Failed to download packages. Please check your network or the mirror.
-pause & exit /b 1
+    echo [WARN] Official PyPI failed. Trying TUNA mirror...
+    "%PYTHON%" -m pip download %PACKAGES% ^
+    --dest "%WHEEL_DIR%" ^
+    --no-cache-dir ^
+    -i https://pypi.tuna.tsinghua.edu.cn/simple
+    if errorlevel 1 (
+        echo [ERROR] Failed to download packages from both sources.
+        pause & exit /b 1
+    ) else (
+        echo [OK] Packages downloaded via TUNA mirror to "%WHEEL_DIR%"
+    )
+) else (
+    echo [OK] Packages downloaded via official PyPI to "%WHEEL_DIR%"
 )
 echo Download complete. Wheels are in "%WHEEL_DIR%"
 

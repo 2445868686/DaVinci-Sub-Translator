@@ -1,6 +1,6 @@
 {
-    "CN": false,
-    "EN": true,
+    "CN": true,
+    "EN": false,
     "PROVIDER": 0,
     "AZURE_DEFAULT_KEY": "",
     "AZURE_DEFAULT_REGION": "",

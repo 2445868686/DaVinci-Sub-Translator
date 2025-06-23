@@ -54,16 +54,24 @@ log SUCCESS "Directories are ready. Target owned by $(whoami)."
 log INFO "[2/4] Clearing pip cache..."
 $PYTHON -m pip cache purge >/dev/null 2>&1 || log WARN "Failed to purge pip cache or cache was already empty."
 
-# ———————— 步骤 3：从镜像源统一下载所有包 ————————
-log INFO "[3/4] Downloading all packages and their dependencies..."
+# ———————— 步骤 3：从官方源尝试下载，如失败再使用镜像源 ————————
+log INFO "[3/4] Attempting to download all packages from official PyPI..."
 if $PYTHON -m pip download "${PACKAGES[@]}" \
     --dest "$WHEEL_DIR" \
     --no-cache-dir \
-    -i "$PIP_MIRROR"; then
-  log SUCCESS "All required files downloaded to: $WHEEL_DIR"
+    -i https://pypi.org/simple; then
+  log SUCCESS "Packages successfully downloaded from official PyPI to: $WHEEL_DIR"
 else
-  log ERROR "Download failed. Check your network, Python environment, or mirror settings."
-  exit 1
+  log WARN "Official PyPI download failed. Trying mirror source: $PIP_MIRROR ..."
+  if $PYTHON -m pip download "${PACKAGES[@]}" \
+      --dest "$WHEEL_DIR" \
+      --no-cache-dir \
+      -i "$PIP_MIRROR"; then
+    log SUCCESS "Packages successfully downloaded from mirror to: $WHEEL_DIR"
+  else
+    log ERROR "Download failed from both official and mirror sources. Check network or mirror availability."
+    exit 1
+  fi
 fi
 
 # ———————— 步骤 4：从本地目录离线安装所有包 ————————
