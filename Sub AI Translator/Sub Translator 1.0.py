@@ -186,30 +186,115 @@ class GoogleProvider(BaseProvider):
                     raise
                 time.sleep(2 ** attempt)
 
+def get_machine_id():
+        import hashlib
+        import subprocess
+        import uuid
+        system = platform.system()
+        # 1. Linux: /etc/machine-id 或 /var/lib/dbus/machine-id
+        if system == "Linux":
+            for path in ("/etc/machine-id", "/var/lib/dbus/machine-id"):
+                if os.path.exists(path):
+                    try:
+                        return open(path, "r", encoding="utf-8").read().strip()
+                    except Exception:
+                        pass
+        # 2. Windows: 注册表 MachineGuid
+        elif system == "Windows":
+            try:
+                import winreg
+                key = winreg.OpenKey(
+                    winreg.HKEY_LOCAL_MACHINE,
+                    r"SOFTWARE\Microsoft\Cryptography"
+                )
+                value, _ = winreg.QueryValueEx(key, "MachineGuid")
+                return value
+            except Exception:
+                pass
+        # 3. macOS: IOPlatformUUID
+        elif system == "Darwin":
+            try:
+                output = subprocess.check_output(
+                    ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
+                    stderr=subprocess.DEVNULL
+                ).decode()
+                import re
+                m = re.search(r'"IOPlatformUUID" = "([^"]+)"', output)
+                if m:
+                    return m.group(1)
+            except Exception:
+                pass
 
+        # 4. 回退：MAC 地址做 SHA256 哈希
+        mac = uuid.getnode()
+        # uuid.getnode() 不一定保证唯一（虚拟机可能一样），但一般可用
+        return hashlib.sha256(str(mac).encode("utf-8")).hexdigest()
+global USERID 
+USERID = get_machine_id()
 # -- Microsoft ----------------------------
 class AzureProvider(BaseProvider):
     name = AZURE_PROVIDER
     def translate(self, text, target_lang):
-        params  = {"api-version": "3.0", "to": target_lang}
-        headers = {
-            "Ocp-Apim-Subscription-Key": self.cfg["api_key"],
-            "Ocp-Apim-Subscription-Region": self.cfg["region"],
-            "Content-Type": "application/json"
-        }
-        url  = self.cfg["base_url"].rstrip("/") + "/translate"
-        body = [{"text": text}]
+        # -------- 1. 读取配置 --------
+        api_key = self.cfg.get("api_key", "").strip()
+        region  = self.cfg.get("region", "").strip()
 
-        for attempt in range(1, self.cfg.get("max_retry", 3)+1):
+        # -------- 2A. 走 Azure 官方翻译 --------
+        if api_key and region:
+            params = {"api-version": "3.0", "to": target_lang}
+            headers = {
+                "Ocp-Apim-Subscription-Key": api_key,
+                "Ocp-Apim-Subscription-Region": region,
+                "Content-Type": "application/json"
+            }
+            url  = (self.cfg.get("base_url") or AZURE_DEFAULT_URL).rstrip("/") + "/translate"
+            body = [{"text": text}]
+
+            for attempt in range(1, self.cfg.get("max_retry", 3) + 1):
+                try:
+                    r = requests.post(url, params=params, headers=headers,
+                                      json=body, timeout=self.cfg.get("timeout", 15))
+                    r.raise_for_status()
+                    return r.json()[0]["translations"][0]["text"]
+                except Exception as e:
+                    if attempt == self.cfg.get("max_retry", 3):
+                        raise
+                    time.sleep(2 ** attempt)
+
+        # -------- 2B. 否则走 Dify workflow --------
+        headers = {
+            "Authorization": "Bearer app-vol8lkhuewkHvLGL0rnSaZ5L",
+            "Content-Type":  "application/json"
+        }
+        url = "http://118.89.121.18/v1/workflows/run"
+        payload = {
+            "inputs": {
+                "text": text,
+                "target_lang": target_lang
+            },
+            "user": USERID,                # 固定机器 ID
+            "response_mode": "blocking"
+        }
+
+        for attempt in range(1, self.cfg.get("max_retry", 3) + 1):
             try:
-                r = requests.post(url, params=params, headers=headers,
-                                  json=body, timeout=self.cfg.get("timeout", 15))
+                r = requests.post(url, headers=headers,
+                                  json=payload, timeout=self.cfg.get("timeout", 15))
                 r.raise_for_status()
-                return r.json()[0]["translations"][0]["text"]
+                resp = r.json()
+                outputs = resp.get("data", {}).get("outputs", {})
+                if "result" not in outputs:
+                    raise ValueError(
+                        "Dify 返回中找不到 'result' 字段：\n"
+                        + json.dumps(resp, indent=2, ensure_ascii=False)
+                    )
+                return outputs["result"]
             except Exception as e:
                 if attempt == self.cfg.get("max_retry", 3):
                     raise
                 time.sleep(2 ** attempt)
+
+
 # -- DeepL ------------------------                
 class DeepLProvider(BaseProvider):
     name = DEEPL_PROVIDER
