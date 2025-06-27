@@ -462,7 +462,7 @@ win = dispatcher.AddWindow(
                     ui.ComboBox({"ID":"ProviderCombo","Weight":0.1}),
                     ui.Label({"ID":"TargetLangLabel","Text":"目标语言","Weight":0.1}),
                     ui.ComboBox({"ID":"TargetLangCombo","Weight":0.1}),
-                    ui.Button({"ID":"TransButton","Text":"翻译","Weight":0.15}),
+                    ui.Button({"ID":"TransButtonTab1","Text":"翻译","Weight":0.15}),
                     ui.Label({"ID": "StatusLabel", "Text": " ", "Alignment": {"AlignHCenter": True, "AlignVCenter": True},"Weight":0.1}),
                     #ui.TextEdit({"ID":"SubTxt","Text":"","ReadOnly":False,"Weight":0.8}),
                     ui.Button({
@@ -476,6 +476,14 @@ win = dispatcher.AddWindow(
                             "Weight": 0
                         })
                 ]),
+                ui.VGroup({"Weight":1},[
+                    ui.TextEdit({"ID": "OriginalTxt", "Text": "","PlaceholderText": "", "Weight": 0.9, "Font": ui.Font({"PixelSize": 15}),"HTML" : False, }),
+                    ui.Button({"ID": "TransButtonTab2", "Text": "", "Weight": 0.1}),
+                    ui.TextEdit({"ID": "TranslateTxt", "Text": "","PlaceholderText": "", "Weight": 0.9, "Font": ui.Font({"PixelSize": 15}),"TextBackgroundColor": { "R": 0.2, "G": 0.2, "B": 0.2 }}),
+                    
+
+                ]),
+                                 
                 # ===== 4.2 配置页 =====
                 ui.VGroup({"Weight":1},[
                     ui.HGroup({"Weight": 0.1}, [
@@ -683,10 +691,13 @@ msgbox.On.msg.Close = on_msg_close
 
 translations = {
     "cn": {
-        "Tabs": ["翻译","配置"],
+        "Tabs": ["轨道翻译","单句翻译","配置"],
         "OpenAIFormatModelLabel":"选择模型：",
         "TargetLangLabel":"目标语音：",
-        "TransButton":"开始翻译",
+        "TransButtonTab1":"开始翻译",
+        "TransButtonTab2":"开始翻译",
+        "OriginalTxt":"将文本粘贴到这里...",
+        "TranslateTxt":"翻译",
         "MicrosoftConfigLabel":"Microsoft",
         "ShowAzure":"配置",
         "OpenAIFormatConfigLabel":"Open AI 格式",
@@ -718,10 +729,13 @@ translations = {
     },
 
     "en": {
-        "Tabs": ["Translator", "Configuration"],
+        "Tabs": ["Translator","TextTrans", "Configuration"],
         "OpenAIFormatModelLabel":"Select Model:",
         "TargetLangLabel":"Target Language:",
-        "TransButton":"Translate",
+        "TransButtonTab1":"Translate",
+        "TransButtonTab2":"Translate",
+        "OriginalTxt":"Paste the text here...",
+        "TranslateTxt":"Translate",
         "MicrosoftConfigLabel":"Microsoft",
         "ShowAzure":"Config",
         "OpenAIFormatConfigLabel":"Open AI Format",
@@ -854,6 +868,9 @@ def switch_language(lang):
             continue
         if item_id in items:
             items[item_id].Text = text_value
+            if item_id in ("TranslateTxt", "OriginalTxt"):
+                items[item_id].Text = ""
+                items[item_id].PlaceholderText = text_value 
         elif item_id in azure_items:    
             azure_items[item_id].Text = text_value
         elif item_id in openai_items:    
@@ -864,7 +881,6 @@ def switch_language(lang):
             add_model_items[item_id].Text = text_value
         else:
             print(f"[Warning] items 中不存在 ID 为 {item_id} 的控件，无法设置文本！")
-
     # 缓存复选框状态
     checked = items["LangEnCheckBox"].Checked
 
@@ -1296,19 +1312,11 @@ def translate_parallel(texts, provider, target_code,
 
 
 # =============== 主按钮逻辑（核心差异处 ★★★） ===============
-def on_trans_clicked(ev):
-    # 1. 取字幕
-    resolve, proj, mpool, root, tl, fps = connect_resolve()
-    subs = get_subtitles(tl)
-    if not subs:
-        show_warning_message(STATUS_MESSAGES.nosub)
-        return
-
-    # 2. 确定 Provider & 目标语言
+def get_provider_and_target():
+    """返回 (provider 实例, target_code)，出错时抛 {'en','zh'} 元组"""
     provider_name = items["ProviderCombo"].CurrentText
-    target_lang_name = items["TargetLangCombo"].CurrentText
-
-    # 2.1 如果是 AI_PROVIDER，再根据模型显示名决定真 model
+    target_name   = items["TargetLangCombo"].CurrentText
+    print(provider_name)
     if provider_name == OPENAI_FORMAT_PROVIDER:
         if not (openai_items["OpenAIFormatBaseURL"].Text and openai_items["OpenAIFormatApiKey"].Text):
             show_warning_message(STATUS_MESSAGES.enter_api_key)
@@ -1324,38 +1332,49 @@ def on_trans_clicked(ev):
             api_key = api_key,
             temperature = temperature
         )
-        provider     = prov_manager.get(OPENAI_FORMAT_PROVIDER)
-        target_code  = target_lang_name                 # AI 使用全称
-    elif provider_name == AZURE_PROVIDER:
-        if not (azure_items["AzureApiKey"].Text and azure_items["AzureRegion"].Text):
-            show_warning_message(STATUS_MESSAGES.enter_api_key)
-        prov_manager.update_cfg(AZURE_PROVIDER,
-            api_key = azure_items["AzureApiKey"].Text.strip() or AZURE_DEFAULT_KEY,
-            region  = azure_items["AzureRegion"].Text.strip() or AZURE_DEFAULT_REGION,
+        return prov_manager.get(OPENAI_FORMAT_PROVIDER), target_name
+
+    if provider_name == AZURE_PROVIDER:
+        #if not azure_items["AzureApiKey"].Text.strip():
+        #    show_warning_message(STATUS_MESSAGES.enter_api_key)
+        prov_manager.update_cfg(
+            AZURE_PROVIDER,
+            api_key = azure_items["AzureApiKey"].Text.strip(),
+            region  = azure_items["AzureRegion"].Text.strip() or AZURE_DEFAULT_REGION
         )
-        provider = prov_manager.get(AZURE_PROVIDER)
-        target_code = AZURE_LANG_CODE_MAP[target_lang_name]
-    elif provider_name == GOOGLE_PROVIDER:
-        provider = prov_manager.get(GOOGLE_PROVIDER)
-        target_code = GOOGLE_LANG_CODE_MAP[target_lang_name]
-    elif provider_name == DEEPL_PROVIDER:
-        if not deepL_items["DeepLApiKey"].Text:
+        return prov_manager.get(AZURE_PROVIDER), AZURE_LANG_CODE_MAP[target_name]
+
+    if provider_name == GOOGLE_PROVIDER:
+        return prov_manager.get(GOOGLE_PROVIDER), GOOGLE_LANG_CODE_MAP[target_name]
+
+    if provider_name == DEEPL_PROVIDER:
+        if not deepL_items["DeepLApiKey"].Text.strip():
             show_warning_message(STATUS_MESSAGES.enter_api_key)
         prov_manager.update_cfg(
             DEEPL_PROVIDER,
             api_key = deepL_items["DeepLApiKey"].Text.strip()
         )
-        provider = prov_manager.get(DEEPL_PROVIDER)
-        target_code = GOOGLE_LANG_CODE_MAP[target_lang_name]   # 复用 Google 代码表
-    else:
-        items["StatusLabel"].Text = "❌ 未识别的服务商"
+        return prov_manager.get(DEEPL_PROVIDER), GOOGLE_LANG_CODE_MAP[target_name]
+
+    items["StatusLabel"].Text = "❌ 未识别的服务商"
+
+def on_trans_clicked(ev):
+    # ---------- 1 采集字幕 ----------
+    resolve, proj, mpool, root, tl, fps = connect_resolve()
+    subs = get_subtitles(tl)
+    if not subs:
+        show_warning_message(STATUS_MESSAGES.nosub)
         return
 
-    # 3. 并发翻译
-    items["TransButton"].Enabled = False
+    # ---------- 2 Provider & 目标语种 ----------
+    provider, target_code = get_provider_and_target()
+
+    # ---------- 3 连通性轻量检测 ----------
+    items["TransButtonTab1"].Enabled = False
     show_warning_message(STATUS_MESSAGES.initialize)
     try:
-        first_result = provider.initialize(subs[0]["text"], target_code)
+        # 只 ping 第一条，不保存结果，若异常说明 Key/额度等有问题
+        provider.translate(subs[0]["text"], target_code)
     except requests.exceptions.HTTPError as e:
         # 拿到 HTTP 响应码
         code = e.response.status_code if e.response is not None else None
@@ -1374,38 +1393,96 @@ def on_trans_clicked(ev):
         # 显示对应的提示，找不到就用 initialize_fault
         show_warning_message(code_map.get(code, STATUS_MESSAGES.initialize_fault))
         print(f"初始化失败，HTTP状态码：{code}，异常：{e}")
-        items["TransButton"].Enabled = True
+        items["TransButtonTab1"].Enabled = True
         return
     except Exception as e:
         # 其它错误
         show_warning_message(STATUS_MESSAGES.initialize_fault)
         print(f"初始化失败，异常原因：{e}")
-        items["TransButton"].Enabled = True
+        items["TransButtonTab1"].Enabled = True
         return
-    # 4. 并发翻译，translate_parallel 会从 0 开始统计 token
+    
+    # ---------- 4 并发翻译 ----------
     show_dynamic_message(
         f"Start translating... 0% (0/{len(subs)})",
         f"开始翻译... 0% （0/{len(subs)}）"
     )
-    texts      = [s["text"] for s in subs]
-    translated,total_tokens = translate_parallel(texts, provider, target_code, status_label=items["StatusLabel"])
-
+    texts = [s["text"] for s in subs]
+    translated, total_tokens = translate_parallel(
+        texts, provider, target_code, status_label=items["StatusLabel"]
+    )
     for s, new_txt in zip(subs, translated):
-        s["text"] = new_txt
-    # 4. 写 SRT → 导入
-    srt_dir = os.path.join(script_path, "srt")
-    srt_path = write_srt(subs, tl.GetStartFrame(), fps,
-                         tl.GetName(), target_code, output_dir=srt_dir)
+        s["text"] = new_txt or ""
+
+    # ---------- 5 写 SRT 并导入 ----------
+    srt_dir  = os.path.join(script_path, "srt")
+    srt_path = write_srt(
+        subs,
+        tl.GetStartFrame(),
+        fps,
+        tl.GetName(),
+        target_code,
+        output_dir=srt_dir
+    )
     if import_srt_to_first_empty(srt_path):
-        en = f"✅ Finished! 100% （{len(subs)}/{len(subs)}）  Tokens used:{total_tokens}"
-        zh = f"✅ 翻译完成！ 100% （{len(subs)}/{len(subs)}）  已消耗Tokens：{total_tokens}"
-        show_dynamic_message(en,zh)
+        show_dynamic_message(
+            f"✅ Finished! 100% ({len(subs)}/{len(subs)})  Tokens:{total_tokens}",
+            f"✅ 翻译完成！100%（{len(subs)}/{len(subs)}）  Tokens:{total_tokens}"
+        )
     else:
         items["StatusLabel"].Text = "⚠️ 导入失败！"
 
-    items["TransButton"].Enabled = True
-win.On.TransButton.Clicked = on_trans_clicked
+    items["TransButtonTab1"].Enabled = True
+win.On.TransButtonTab1.Clicked = on_trans_clicked
+# ---------------- 单句翻译按钮 ----------------
+def on_trans2_clicked(ev):
+    """
+    翻译 OriginalTxt 单行文本 ➜ TranslateTxt
+    """
+    # ---------- 0 读取并检查源文本 ----------
+    src = items["OriginalTxt"].PlainText
+    # ---------- 1 Provider & 目标语言 ----------
+    try:
+        provider, target_code = get_provider_and_target()
+    except Exception:
+        return
+    print(provider)
+    items["TransButtonTab2"].Enabled = False
+    # ---------- 2 轻量检测 & 翻译 ----------
+    try:
+        # 若 provider 是 OpenAIFormatProvider，translate 返回 (text, usage)
+        if isinstance(provider, OpenAIFormatProvider):
+            text_out, _ = provider.translate(src, target_code)
+        else:
+            res = provider.translate(src, target_code)
+            # 有些 provider 返回 None，应特殊处理
+            if not res or not isinstance(res, str):
+                raise ValueError("翻译结果无效，未返回字符串")
+            text_out = res
+        show_warning_message(STATUS_MESSAGES.finished)
+        items["TranslateTxt"].Text = text_out
 
+    except requests.exceptions.HTTPError as e:
+        code = e.response.status_code if e.response else None
+        code_map = {
+            400: STATUS_MESSAGES.bad_request,
+            401: STATUS_MESSAGES.unauthorized,
+            403: STATUS_MESSAGES.forbidden,
+            404: STATUS_MESSAGES.not_found,
+            429: STATUS_MESSAGES.too_many_requests,
+            500: STATUS_MESSAGES.internal_server_error,
+            502: STATUS_MESSAGES.bad_gateway,
+            503: STATUS_MESSAGES.service_unavailable,
+            504: STATUS_MESSAGES.gateway_timeout,
+        }
+        show_warning_message(code_map.get(code, STATUS_MESSAGES.initialize_fault))
+        print(f"HTTPError {code}: {e}")
+
+    except Exception as e:
+        show_warning_message(STATUS_MESSAGES.initialize_fault)
+        print("翻译失败:", e)
+    items["TransButtonTab2"].Enabled = True
+win.On.TransButtonTab2.Clicked = on_trans2_clicked
 # =============== 8  关闭窗口保存设置 ===============
 def on_close(ev):
     import shutil
