@@ -477,7 +477,7 @@ win = dispatcher.AddWindow(
                         })
                 ]),
                 ui.VGroup({"Weight":1},[
-                    ui.TextEdit({"ID": "OriginalTxt", "Text": "","PlaceholderText": "", "Weight": 0.9, "Font": ui.Font({"PixelSize": 15}),"HTML" : False, }),
+                    ui.LineEdit({"ID": "OriginalTxt", "Text": "","PlaceholderText": "", "Weight": 0.9, "Font": ui.Font({"PixelSize": 15}),"RichText" : False, }),
                     ui.Button({"ID": "TransButtonTab2", "Text": "", "Weight": 0.1}),
                     ui.TextEdit({"ID": "TranslateTxt", "Text": "","PlaceholderText": "", "Weight": 0.9, "Font": ui.Font({"PixelSize": 15}),"TextBackgroundColor": { "R": 0.2, "G": 0.2, "B": 0.2 }}),
                     
@@ -691,7 +691,7 @@ msgbox.On.msg.Close = on_msg_close
 
 translations = {
     "cn": {
-        "Tabs": ["轨道翻译","单句翻译","配置"],
+        "Tabs": ["批量翻译","单句翻译","配置"],
         "OpenAIFormatModelLabel":"选择模型：",
         "TargetLangLabel":"目标语音：",
         "TransButtonTab1":"开始翻译",
@@ -729,7 +729,7 @@ translations = {
     },
 
     "en": {
-        "Tabs": ["Translator","TextTrans", "Configuration"],
+        "Tabs": ["Batch","Single", "Configuration"],
         "OpenAIFormatModelLabel":"Select Model:",
         "TargetLangLabel":"Target Language:",
         "TransButtonTab1":"Translate",
@@ -1440,7 +1440,7 @@ def on_trans2_clicked(ev):
     翻译 OriginalTxt 单行文本 ➜ TranslateTxt
     """
     # ---------- 0 读取并检查源文本 ----------
-    src = items["OriginalTxt"].PlainText
+    src = items["OriginalTxt"].Text
     # ---------- 1 Provider & 目标语言 ----------
     try:
         provider, target_code = get_provider_and_target()
