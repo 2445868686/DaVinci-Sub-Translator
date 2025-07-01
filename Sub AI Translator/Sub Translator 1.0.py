@@ -32,8 +32,10 @@ OPENAI_FORMAT_PROVIDER     = "Open AI Format (API Key)"
 AZURE_DEFAULT_KEY    = ""
 AZURE_DEFAULT_REGION = ""
 AZURE_DEFAULT_URL    = "https://api.cognitive.microsofttranslator.com"
+AZURE_REGISTER_URL   = "https://azure.microsoft.com/" 
 PROVIDER             = 0
 DEEPL_DEFAULT_KEY    = ""
+DEEPL_REGISTER_URL   = "https://www.deepl.com/account/summary"
 CONTEXT_WINDOW = 1
 SYSTEM_PROMPT = """
 You are a professional subtitle translation engine.
@@ -123,7 +125,7 @@ except ImportError:
         sys.path.insert(0, lib_dir)
     else:
         # 如果路径不对，可打印日志帮助调试
-        print(f"Warning: TTS/Lib directory doesn’t exist.：{lib_dir}", file=sys.stderr)
+        print(f"Warning: The TTS/Lib directory doesn’t exist:{lib_dir}", file=sys.stderr)
 
     try:
         import requests
@@ -131,7 +133,7 @@ except ImportError:
         from deep_translator import DeeplTranslator
         print(lib_dir)
     except ImportError as e:
-        print("依赖导入失败，请确保所有依赖已打包至 Lib 目录中：", lib_dir, "\n错误信息：", e)
+        print("Dependency import failed—please make sure all dependencies are bundled into the Lib directory:", lib_dir, "\nError message:", e)
 
 RAND_CODE = "".join(random.choices(string.digits, k=2))
 
@@ -570,7 +572,7 @@ azure_config_window = dispatcher.AddWindow(
     {
         "ID": "AzureConfigWin",
         "WindowTitle": "Microsoft API",
-        "Geometry": [750, 400, 400, 200],
+        "Geometry": [750, 400, 300, 150],
         "Hidden": True,
         "StyleSheet": """
         * {
@@ -604,7 +606,7 @@ deepL_config_window = dispatcher.AddWindow(
     {
         "ID": "DeepLConfigWin",
         "WindowTitle": "DeepL API",
-        "Geometry": [780, 420, 350, 160],
+        "Geometry": [780, 420, 300, 100],
         "Hidden": True,
         "StyleSheet": "*{font-size:14px;}"
     },
@@ -880,7 +882,7 @@ def switch_language(lang):
         elif item_id in add_model_items:    
             add_model_items[item_id].Text = text_value
         else:
-            print(f"[Warning] items 中不存在 ID 为 {item_id} 的控件，无法设置文本！")
+            print(f"[Warning] No control with ID {item_id} exists in items, so the text cannot be set!")
     # 缓存复选框状态
     checked = items["LangEnCheckBox"].Checked
 
@@ -971,7 +973,7 @@ azure_config_window.On.AzureConfirm.Clicked = on_azure_close
 azure_config_window.On.AzureConfigWin.Close = on_azure_close
 
 def on_azure_register_link_button_clicked(ev):
-    ...
+    webbrowser.open(AZURE_REGISTER_URL)   # 官网注册页
 azure_config_window.On.AzureRegisterButton.Clicked = on_azure_register_link_button_clicked
 
 def on_show_deepl(ev):
@@ -989,7 +991,7 @@ deepL_config_window.On.DeepLConfirm.Clicked = on_deepl_close
 deepL_config_window.On.DeepLConfigWin.Close = on_deepl_close
 
 def on_deepl_register(ev):
-    webbrowser.open("https://www.deepl.com/account/summary")   # 官网注册页
+    webbrowser.open(DEEPL_REGISTER_URL )   # 官网注册页
 deepL_config_window.On.DeepLRegister.Clicked = on_deepl_register
 
 def on_tts_button(ev):
@@ -1392,13 +1394,13 @@ def on_trans_clicked(ev):
         }
         # 显示对应的提示，找不到就用 initialize_fault
         show_warning_message(code_map.get(code, STATUS_MESSAGES.initialize_fault))
-        print(f"初始化失败，HTTP状态码：{code}，异常：{e}")
+        print(f"Initialization failed. HTTP status code: {code}, Exception: {e}")
         items["TransButtonTab1"].Enabled = True
         return
     except Exception as e:
         # 其它错误
         show_warning_message(STATUS_MESSAGES.initialize_fault)
-        print(f"初始化失败，异常原因：{e}")
+        print(f"Initialization failed.  Exception: {e}")
         items["TransButtonTab1"].Enabled = True
         return
     
@@ -1480,7 +1482,7 @@ def on_trans2_clicked(ev):
 
     except Exception as e:
         show_warning_message(STATUS_MESSAGES.initialize_fault)
-        print("翻译失败:", e)
+        print("Translation failed:", e)
     items["TransButtonTab2"].Enabled = True
 win.On.TransButtonTab2.Clicked = on_trans2_clicked
 # =============== 8  关闭窗口保存设置 ===============
