@@ -441,7 +441,6 @@ except ImportError:
     import DaVinciResolveScript as dvr_script
     from python_get_resolve import GetResolve
 
-resolve = GetResolve()
 ui       = fusion.UIManager
 dispatcher = bmd.UIDispatcher(ui)
 
@@ -1146,7 +1145,6 @@ def on_openai_model_changed(ev):
 openai_format_config_window.On.OpenAIFormatModelCombo.CurrentIndexChanged = on_openai_model_changed
 # =============== 5  Resolve 辅助函数 ===============
 def connect_resolve():
-    resolve = dvr_script.scriptapp("Resolve")
     project_manager = resolve.GetProjectManager()
     project = project_manager.GetCurrentProject()
     media_pool = project.GetMediaPool(); 
