@@ -76,19 +76,70 @@ from abc import ABC, abstractmethod
 import webbrowser
 import random
 import string
+SCRIPT_PATH = os.path.dirname(os.path.abspath(sys.argv[0]))
+RAND_CODE = "".join(random.choices(string.digits, k=2))
+
+ui       = fusion.UIManager
+dispatcher = bmd.UIDispatcher(ui)
+loading_win = dispatcher.AddWindow(
+    {
+        "ID": "LoadingWin",                            
+        "WindowTitle": "Loading",                     
+        "Geometry": [X_CENTER, Y_CENTER, WINDOW_WIDTH, WINDOW_HEIGHT],                  
+        "Spacing": 10,                                
+        "StyleSheet": "*{font-size:14px;}"            
+    },
+    [
+        ui.VGroup(                                  
+            [
+                ui.Label(                          
+                    {
+                        "ID": "LoadLabel", 
+                        "Text": "Loading...",
+                        "Alignment": {"AlignHCenter": True, "AlignVCenter": True},
+                    }
+                )
+            ]
+        )
+    ]
+)
+loading_win.Show()
+# ================== DaVinci Resolve 接入 ==================
+try:
+    import DaVinciResolveScript as dvr_script
+    from python_get_resolve import GetResolve
+    print("DaVinciResolveScript from Python")
+except ImportError:
+    # mac / windows 常规路径补全
+    if platform.system() == "Darwin": 
+        path1 = "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting/Examples"
+        path2 = "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting/Modules"
+    elif platform.system() == "Windows":
+        path1 = os.path.join(os.environ['PROGRAMDATA'], "Blackmagic Design", "DaVinci Resolve", "Support", "Developer", "Scripting", "Examples")
+        path2 = os.path.join(os.environ['PROGRAMDATA'], "Blackmagic Design", "DaVinci Resolve", "Support", "Developer", "Scripting", "Modules")
+    else:
+        raise EnvironmentError("Unsupported operating system")
+    sys.path += [path1, path2]
+    import DaVinciResolveScript as dvr_script
+    from python_get_resolve import GetResolve
+    print("DaVinciResolveScript from DaVinci")
+
+def connect_resolve():
+    project_manager = resolve.GetProjectManager()
+    project = project_manager.GetCurrentProject()
+    media_pool = project.GetMediaPool(); 
+    root_folder = media_pool.GetRootFolder()
+    timeline      = project.GetCurrentTimeline()
+    fps     = float(project.GetSetting("timelineFrameRate"))
+    return resolve, project, media_pool,root_folder,timeline, fps
 
 try:
     import requests
     from deep_translator import GoogleTranslator
     from deep_translator import DeeplTranslator
 except ImportError:
-    # 1. 获取脚本所在目录（备用）
-    script_path = os.path.dirname(os.path.abspath(sys.argv[0]))
-
-    # 2. 根据不同平台设置 Lib 目录为绝对路径
     system = platform.system()
     if system == "Windows":
-        # Windows 下 C:\ProgramData\Blackmagic Design\DaVinci Resolve\Fusion\TTS\Lib
         program_data = os.environ.get("PROGRAMDATA", r"C:\ProgramData")
         lib_dir = os.path.join(
             program_data,
@@ -100,7 +151,6 @@ except ImportError:
             "Lib"
         )
     elif system == "Darwin":
-        # macOS 下 /Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/TTS/Lib
         lib_dir = os.path.join(
             "/Library",
             "Application Support",
@@ -112,19 +162,14 @@ except ImportError:
             "Lib"
         )
     else:
-        # 其他平台（Linux 等），回退到相对路径
         lib_dir = os.path.normpath(
-            os.path.join(script_path, "..", "..", "..","HB", SCRIPT_NAME,"Lib")
+            os.path.join(SCRIPT_PATH, "..", "..", "..","HB", SCRIPT_NAME,"Lib")
         )
 
-    # 3. 规范化一下路径（去掉多余分隔符或 ..）
     lib_dir = os.path.normpath(lib_dir)
-    # —— 二、插入到 sys.path —— 
     if os.path.isdir(lib_dir):
-        # 放到最前面，确保优先加载
         sys.path.insert(0, lib_dir)
     else:
-        # 如果路径不对，可打印日志帮助调试
         print(f"Warning: The TTS/Lib directory doesn’t exist:{lib_dir}", file=sys.stderr)
 
     try:
@@ -135,10 +180,8 @@ except ImportError:
     except ImportError as e:
         print("Dependency import failed—please make sure all dependencies are bundled into the Lib directory:", lib_dir, "\nError message:", e)
 
-RAND_CODE = "".join(random.choices(string.digits, k=2))
 
-script_path       = os.path.dirname(os.path.abspath(sys.argv[0]))
-config_dir        = os.path.join(script_path, "config")
+config_dir        = os.path.join(SCRIPT_PATH, "config")
 settings_file     = os.path.join(config_dir, "translator_settings.json")
 custom_models_file = os.path.join(config_dir, "models.json")
 status_file = os.path.join(config_dir, 'status.json')
@@ -358,9 +401,6 @@ class OpenAIFormatProvider(BaseProvider):
                     raise
                 time.sleep(2 ** attempt)
 
-
-
-
 # =============== Provider 管理器 ===============
 class ProviderManager:
     def __init__(self, cfg: dict):
@@ -422,27 +462,6 @@ PROVIDERS_CFG = {
 }
 
 prov_manager = ProviderManager(PROVIDERS_CFG)   # 实例化
-
-# ================== DaVinci Resolve 接入 ==================
-try:
-    import DaVinciResolveScript as dvr_script
-    from python_get_resolve import GetResolve
-except ImportError:
-    # mac / windows 常规路径补全
-    if platform.system() == "Darwin": 
-        path1 = "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting/Examples"
-        path2 = "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting/Modules"
-    elif platform.system() == "Windows":
-        path1 = os.path.join(os.environ['PROGRAMDATA'], "Blackmagic Design", "DaVinci Resolve", "Support", "Developer", "Scripting", "Examples")
-        path2 = os.path.join(os.environ['PROGRAMDATA'], "Blackmagic Design", "DaVinci Resolve", "Support", "Developer", "Scripting", "Modules")
-    else:
-        raise EnvironmentError("Unsupported operating system")
-    sys.path += [path1, path2]
-    import DaVinciResolveScript as dvr_script
-    from python_get_resolve import GetResolve
-
-ui       = fusion.UIManager
-dispatcher = bmd.UIDispatcher(ui)
 
 # -------------------- 4  GUI 搭建 --------------------
 win = dispatcher.AddWindow(
@@ -1144,14 +1163,6 @@ def on_openai_model_changed(ev):
 # 4. 绑定事件：ComboBox 的 CurrentIndexChanged
 openai_format_config_window.On.OpenAIFormatModelCombo.CurrentIndexChanged = on_openai_model_changed
 # =============== 5  Resolve 辅助函数 ===============
-def connect_resolve():
-    project_manager = resolve.GetProjectManager()
-    project = project_manager.GetCurrentProject()
-    media_pool = project.GetMediaPool(); 
-    root_folder = media_pool.GetRootFolder()
-    timeline      = project.GetCurrentTimeline()
-    fps     = float(project.GetSetting("timelineFrameRate"))
-    return resolve, project, media_pool,root_folder,timeline, fps
 
 def get_subtitles(timeline):
     subs = []
@@ -1415,7 +1426,7 @@ def on_trans_clicked(ev):
         s["text"] = new_txt or ""
 
     # ---------- 5 写 SRT 并导入 ----------
-    srt_dir  = os.path.join(script_path, "srt")
+    srt_dir  = os.path.join(SCRIPT_PATH, "srt")
     srt_path = write_srt(
         subs,
         tl.GetStartFrame(),
@@ -1486,7 +1497,7 @@ win.On.TransButtonTab2.Clicked = on_trans2_clicked
 # =============== 8  关闭窗口保存设置 ===============
 def on_close(ev):
     import shutil
-    output_dir = os.path.join(script_path, 'srt')
+    output_dir = os.path.join(SCRIPT_PATH, "srt")
     if os.path.exists(output_dir):
         try:
             shutil.rmtree(output_dir)  # ✅ 删除整个文件夹及其中内容
@@ -1503,6 +1514,7 @@ def on_add_model_close(ev):
     add_model_window.Hide(); 
 add_model_window.On.AddModelWin.Close = on_add_model_close
 # =============== 9  运行 GUI ===============
+loading_win.Hide() 
 win.Show(); 
 dispatcher.RunLoop(); 
 win.Hide(); 
