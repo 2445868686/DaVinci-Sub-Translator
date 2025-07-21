@@ -1,21 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
+# 获取管理员权限
+if [ "$EUID" -ne 0 ]; then
+  echo "Enter Password："
+  exec sudo "$0" "$@"
+  exit
+fi
 # ———————— 配置变量 ————————
 # Python 解释器路径
 PYTHON=python3
-
+SCRIPT_NAME="Sub AI Translator"
 # 将所有需要安装的包定义在一个数组中
 # 新增了 setuptools 和 wheel，它们是从源码（如 .tar.gz）构建和安装包所必需的工具
 # pip 会智能地利用它们来处理 googletrans 的源码包
 PACKAGES=(
   "deep_translator"
-  "requests"
+  "requests"  
 )
 
 # DaVinci Resolve Fusion 脚本目录
-WHEEL_DIR="/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/HB/Translator/wheel"
-TARGET_DIR="/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/HB/Translator/Lib"
+WHEEL_DIR="/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/HB/$SCRIPT_NAME/wheel"
+TARGET_DIR="/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/HB/$SCRIPT_NAME/Lib"
 
 # 使用的 PyPI 镜像源
 PIP_MIRROR="https://pypi.tuna.tsinghua.edu.cn/simple"
