@@ -4,9 +4,10 @@ chcp 65001 >nul
 setlocal
 
 :: ============ 可根据需要修改 =============
-set "PYTHON=python" :: 若 python 不在 PATH，请改绝对路径，例如 C:\Python311\python.exe
-set "WHEEL_DIR=C:\ProgramData\Blackmagic Design\DaVinci Resolve\Fusion\HB\Sub AI Translator\wheel"
-set "TARGET_DIR=C:\ProgramData\Blackmagic Design\DaVinci Resolve\Fusion\HB\Sub AI Translator\Lib"
+set "PYTHON=python" 
+set "SCRIPT_NAME=Sub AI Translator"
+set "WHEEL_DIR=C:\ProgramData\Blackmagic Design\DaVinci Resolve\Fusion\HB\%SCRIPT_NAME%\wheel"
+set "TARGET_DIR=C:\ProgramData\Blackmagic Design\DaVinci Resolve\Fusion\HB\%SCRIPT_NAME%\Lib"
 
 :: 将所有需要安装的包放在一个变量里
 :: 新增了 setuptools 和 wheel，它们是安装源代码包所必需的构建工具
