@@ -905,26 +905,14 @@ def switch_language(lang):
     checked = items["LangEnCheckBox"].Checked
 
 
+def on_lang_checkbox_clicked(ev):
+    is_en_checked = ev['sender'].ID == "LangEnCheckBox"
+    items["LangCnCheckBox"].Checked = not is_en_checked
+    items["LangEnCheckBox"].Checked = is_en_checked
+    switch_language("en" if is_en_checked else "cn")
 
-def on_cn_checkbox_clicked(ev):
-    items["LangEnCheckBox"].Checked = not items["LangCnCheckBox"].Checked
-    if items["LangEnCheckBox"].Checked:
-        switch_language("en")
-        print("en")
-    else:
-        print("cn")
-        switch_language("cn")
-win.On.LangCnCheckBox.Clicked = on_cn_checkbox_clicked
-
-def on_en_checkbox_clicked(ev):
-    items["LangCnCheckBox"].Checked = not items["LangEnCheckBox"].Checked
-    if items["LangEnCheckBox"].Checked:
-        switch_language("en")
-        print("en")
-    else:
-        print("cn")
-        switch_language("cn")
-win.On.LangEnCheckBox.Clicked = on_en_checkbox_clicked
+win.On.LangCnCheckBox.Clicked = on_lang_checkbox_clicked
+win.On.LangEnCheckBox.Clicked = on_lang_checkbox_clicked
 
 
 if saved_settings:
