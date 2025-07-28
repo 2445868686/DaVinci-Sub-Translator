@@ -18,8 +18,8 @@ CONCURRENCY = 10
 MAX_RETRY   = 3
 TIMEOUT     = 30
 
-OEPANI_FORMAT_API_KEY   = ""
-OEPANI_FORMAT_BASE_URL   = "https://api.openai.com"
+OPENAI_FORMAT_API_KEY   = ""
+OPENAI_FORMAT_BASE_URL   = "https://api.openai.com"
 OPENAI_FORMAT_MODEL = "gpt-4o-mini"
 OPENAI_DEFAULT_TEMPERATURE = 0.3
 
@@ -451,8 +451,8 @@ PROVIDERS_CFG = {
         },
         OPENAI_FORMAT_PROVIDER: {
             "class": "OpenAIFormatProvider",
-            "base_url": OEPANI_FORMAT_BASE_URL,
-            "api_key":  OEPANI_FORMAT_API_KEY,
+            "base_url": OPENAI_FORMAT_BASE_URL,
+            "api_key":  OPENAI_FORMAT_API_KEY,
             "model":    OPENAI_FORMAT_MODEL,
             "temperature":OPENAI_DEFAULT_TEMPERATURE,
             "max_retry": MAX_RETRY,
@@ -566,7 +566,7 @@ openai_format_config_window = dispatcher.AddWindow(
                     ui.LineEdit({"ID": "OpenAIFormatModelName", "ReadOnly":True, "Text": ""}),
                 ]),
                 ui.Label({"ID": "OpenAIFormatBaseURLLabel", "Text": "* Base URL"}),
-                ui.LineEdit({"ID": "OpenAIFormatBaseURL",  "Text": "","PlaceholderText":OEPANI_FORMAT_BASE_URL}),
+                ui.LineEdit({"ID": "OpenAIFormatBaseURL",  "Text": "","PlaceholderText":OPENAI_FORMAT_BASE_URL}),
                 ui.Label({"ID": "OpenAIFormatApiKeyLabel", "Text": "* API Key"}),
                 ui.LineEdit({"ID": "OpenAIFormatApiKey", "Text": "",  "EchoMode": "Password"}),
                 ui.HGroup({"Weight": 0.2}, [
@@ -843,10 +843,10 @@ default_settings = {
     "AZURE_DEFAULT_REGION":"",
     "DEEPL_DEFAULT_KEY":"",
     "PROVIDER":0,
-    "OEPANI_FORMAT_BASE_URL": "",
-    "OEPANI_FORMAT_API_KEY": "",
+    "OPENAI_FORMAT_BASE_URL": "",
+    "OPENAI_FORMAT_API_KEY": "",
     "OPENAI_FORMAT_MODEL": 0,
-    "OEPANI_FORMAT_TEMPERATURE":0.3,
+    "OPENAI_FORMAT_TEMPERATURE":0.3,
   
     "TARGET_LANG":0,
     "CN":True,
@@ -925,9 +925,9 @@ if saved_settings:
     azure_items["AzureRegion"].Text = saved_settings.get("AZURE_DEFAULT_REGION", default_settings["AZURE_DEFAULT_REGION"])
     deepL_items["DeepLApiKey"].Text = saved_settings.get("DEEPL_DEFAULT_KEY",default_settings["DEEPL_DEFAULT_KEY"])
     openai_items["OpenAIFormatModelCombo"].CurrentIndex = saved_settings.get("OPENAI_FORMAT_MODEL", default_settings["OPENAI_FORMAT_MODEL"])
-    openai_items["OpenAIFormatBaseURL"].Text = saved_settings.get("OEPANI_FORMAT_BASE_URL", default_settings["OEPANI_FORMAT_BASE_URL"])
-    openai_items["OpenAIFormatApiKey"].Text = saved_settings.get("OEPANI_FORMAT_API_KEY", default_settings["OEPANI_FORMAT_API_KEY"])
-    openai_items["OpenAIFormatTemperatureSpinBox"].Value = saved_settings.get("OEPANI_FORMAT_TEMPERATURE", default_settings["OEPANI_FORMAT_TEMPERATURE"])
+    openai_items["OpenAIFormatBaseURL"].Text = saved_settings.get("OPENAI_FORMAT_BASE_URL", default_settings["OPENAI_FORMAT_BASE_URL"])
+    openai_items["OpenAIFormatApiKey"].Text = saved_settings.get("OPENAI_FORMAT_API_KEY", default_settings["OPENAI_FORMAT_API_KEY"])
+    openai_items["OpenAIFormatTemperatureSpinBox"].Value = saved_settings.get("OPENAI_FORMAT_TEMPERATURE", default_settings["OPENAI_FORMAT_TEMPERATURE"])
 if items["LangEnCheckBox"].Checked :
     switch_language("en")
 else:
@@ -943,9 +943,9 @@ def close_and_save(settings_file):
         "AZURE_DEFAULT_REGION":azure_items["AzureRegion"].Text,
         "DEEPL_DEFAULT_KEY":deepL_items["DeepLApiKey"].Text,
         "OPENAI_FORMAT_MODEL": openai_items["OpenAIFormatModelCombo"].CurrentIndex,
-        "OEPANI_FORMAT_BASE_URL": openai_items["OpenAIFormatBaseURL"].Text,
-        "OEPANI_FORMAT_API_KEY": openai_items["OpenAIFormatApiKey"].Text,
-        "OEPANI_FORMAT_TEMPERATURE": openai_items["OpenAIFormatTemperatureSpinBox"].Value,
+        "OPENAI_FORMAT_BASE_URL": openai_items["OpenAIFormatBaseURL"].Text,
+        "OPENAI_FORMAT_API_KEY": openai_items["OpenAIFormatApiKey"].Text,
+        "OPENAI_FORMAT_TEMPERATURE": openai_items["OpenAIFormatTemperatureSpinBox"].Value,
         "TARGET_LANG":items["TargetLangCombo"].CurrentIndex,
 
     }
@@ -1052,7 +1052,7 @@ def verify_settings(base_url, api_key, model):
         return False, str(e), code
 
 def on_verify_model(ev):
-    base_url = openai_items["OpenAIFormatBaseURL"].Text.strip() or OEPANI_FORMAT_BASE_URL
+    base_url = openai_items["OpenAIFormatBaseURL"].Text.strip() or OPENAI_FORMAT_BASE_URL
     model    = openai_items["OpenAIFormatModelName"].PlaceholderText.strip()
     api_key  = openai_items["OpenAIFormatApiKey"].Text.strip()
     ok,msg,code = verify_settings(base_url, api_key, model)
@@ -1321,7 +1321,7 @@ def get_provider_and_target():
             show_warning_message(STATUS_MESSAGES.enter_api_key)
         
         model = openai_items["OpenAIFormatModelName"].PlaceholderText.strip()
-        base_url   = openai_items["OpenAIFormatBaseURL"].Text.strip() or OEPANI_FORMAT_BASE_URL
+        base_url   = openai_items["OpenAIFormatBaseURL"].Text.strip() or OPENAI_FORMAT_BASE_URL
         api_key    = openai_items["OpenAIFormatApiKey"].Text.strip()
         temperature = openai_items["OpenAIFormatTemperatureSpinBox"].Value
         # 更新 Provider 配置
