@@ -4,7 +4,7 @@ SCRIPT_VERSION = " 1.0"
 SCRIPT_AUTHOR  = "HEIBA"
 
 SCREEN_WIDTH, SCREEN_HEIGHT = 1920, 1080
-WINDOW_WIDTH, WINDOW_HEIGHT = 300, 300
+WINDOW_WIDTH, WINDOW_HEIGHT = 285, 315
 X_CENTER = (SCREEN_WIDTH  - WINDOW_WIDTH ) // 2
 Y_CENTER = (SCREEN_HEIGHT - WINDOW_HEIGHT) // 2
 
@@ -13,6 +13,8 @@ SCRIPT_WX_URL        = "https://mp.weixin.qq.com/s?__biz=MzUzMTk2MDU5Nw==&mid=22
 SCRIPT_BILIBILI_URL  = "https://space.bilibili.com/385619394"
 TTS_KOFI_URL         = "https://ko-fi.com/s/9e769243b5"
 TTS_TAOBAO_URL       = "https://item.taobao.com/item.htm?id=808582811947"
+WHISPER_KOFI_URL = "https://ko-fi.com/s/da133415d5"
+WHISPER_TAOBAO_URL = "https://item.taobao.com/item.htm?ft=t&id=959855444978"
 
 CONCURRENCY = 10
 MAX_RETRY   = 3
@@ -519,7 +521,8 @@ win = dispatcher.AddWindow(
                         ui.Button({"ID":"ShowOpenAIFormat","Text":"配置","Weight":0.1}),
                     ]),
                     ui.Label({"ID":"MoreScriptLabel","Text":"","Weight":0.1,"Alignment": {"AlignHCenter": True, "AlignVCenter": True}}),
-                    ui.Button({"ID":"TTSButton","Text":"文字转语音插件","Weight":0.1}),
+                    ui.Button({"ID":"TTSButton","Text":"语音合成","Weight":0.1}),
+                    ui.Button({"ID":"WhisperButton","Text":"AI字幕生成","Weight":0.1}),
                     ui.HGroup({"Weight":0.1},[
                         ui.CheckBox({"ID":"LangEnCheckBox","Text":"EN","Checked":True,"Weight":0}),
                         ui.CheckBox({"ID":"LangCnCheckBox","Text":"简体中文","Checked":False,"Weight":1}),
@@ -723,7 +726,8 @@ translations = {
         "OpenAIFormatConfigLabel":"Open AI 格式",
         "ShowOpenAIFormat": "配置",
         "MoreScriptLabel":"\n———————更多功能———————",
-        "TTSButton":"文字转语音（TTS）插件",
+        "TTSButton":"语音合成（TTS）",
+        "WhisperButton":"AI字幕生成",
         "ProviderLabel":"服务商",
         "DeepLConfigLabel":"DeepL",
         "ShowDeepL":"配置",
@@ -761,7 +765,8 @@ translations = {
         "OpenAIFormatConfigLabel":"Open AI Format",
         "ShowOpenAIFormat": "Config",
         "MoreScriptLabel":"\n—————MORE FEATURES—————",
-        "TTSButton":"Text to Speech (TTS) Script",
+        "TTSButton":"Text to Speech (TTS)",
+        "WhisperButton":"AI-Generated Subtitles",
         "ProviderLabel":"Provider",
         "DeepLConfigLabel":"DeepL",
         "ShowDeepL":"Config",
@@ -1006,7 +1011,12 @@ def on_tts_button(ev):
     else :
         webbrowser.open(TTS_TAOBAO_URL)
 win.On.TTSButton.Clicked = on_tts_button
-
+def on_whisper_button(ev):
+    if items["LangEnCheckBox"].Checked :
+        webbrowser.open(WHISPER_KOFI_URL)
+    else :
+        webbrowser.open(WHISPER_TAOBAO_URL)
+win.On.WhisperButton.Clicked = on_whisper_button
 def on_open_link_button_clicked(ev):
     if items["LangEnCheckBox"].Checked :
         webbrowser.open(SCRIPT_KOFI_URL)
