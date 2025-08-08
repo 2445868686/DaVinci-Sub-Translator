@@ -30,6 +30,7 @@ GOOGLE_PROVIDER = "Google"
 AZURE_PROVIDER  = "Microsoft (API Key)"
 DEEPL_PROVIDER = "DeepL (API Key)"
 OPENAI_FORMAT_PROVIDER     = "Open AI Format (API Key)"
+PLUS_PROVIDER = "Free AI"    
 
 AZURE_DEFAULT_KEY    = ""
 AZURE_DEFAULT_REGION = ""
@@ -40,7 +41,7 @@ DEEPL_DEFAULT_KEY    = ""
 DEEPL_REGISTER_URL   = "https://www.deepl.com/account/summary"
 CONTEXT_WINDOW = 1
 SYSTEM_PROMPT = """
-You are a professional subtitle translation engine.
+You are a professional {target_lang} subtitle translation engine.
 
 Task: Translate ONLY the sentence shown after the tag <<< Sentence >>> into {target_lang}.
 
@@ -211,6 +212,54 @@ class BaseProvider(ABC):
     @abstractmethod
     def translate(self, text: str, target_lang: str, *args, **kwargs) -> str: ...
 
+class PlusProvider(BaseProvider):
+    """通过 Dify Workflow 调用 Plus 模型的翻译服务"""
+    name = PLUS_PROVIDER
+    _session = requests.Session()
+
+    def translate(self, text, target_lang, prefix: str = "", suffix: str = ""):
+        prompt_content = SYSTEM_PROMPT.format(target_lang=target_lang)
+        messages = [{"role": "system", "content": prompt_content}]
+        ctx = "\n<<< Sentence >>>\n".join(filter(None, [prefix, suffix]))
+        if ctx:
+            messages.append({"role": "assistant", "content": ctx})
+        messages.append({"role": "user",
+                         "content": f"<<< Sentence >>>\n{text}"})
+        message_str = json.dumps(messages, ensure_ascii=False)
+        headers = {
+            "Authorization": "Bearer app-mZ3hmRvI1L0TaVpgFZfnYXWf",
+            "Content-Type":  "application/json"
+        }
+        url = "http://118.89.121.18/v1/workflows/run"
+        payload = {
+            "inputs": {
+                "messages": message_str,
+            },
+            "user": USERID,
+            "response_mode": "blocking"
+        }
+
+        for attempt in range(1, self.cfg.get("max_retry", 3) + 1):
+            try:
+                r = self._session.post(url, headers=headers,
+                                       json=payload,
+                                       timeout=self.cfg.get("timeout", 15))
+                r.raise_for_status()
+                resp = r.json()
+                outputs = resp.get("data", {}).get("outputs", {})
+                if "result" not in outputs:
+                    raise ValueError(
+                        "Dify 返回中找不到 'result' 字段：\n"
+                        + json.dumps(resp, indent=2, ensure_ascii=False)
+                    )
+                usage_list = outputs.get("usage", [])
+                total_tokens = sum(u.get("total_tokens", 0) for u in usage_list)
+                return outputs["result"], {"total_tokens": total_tokens}
+
+            except Exception as e:
+                if attempt == self.cfg.get("max_retry", 3):
+                    raise
+                time.sleep(2 ** attempt)
 # -- Google -------------------------------
 class GoogleProvider(BaseProvider):
     name = GOOGLE_PROVIDER
@@ -373,11 +422,11 @@ class OpenAIFormatProvider(BaseProvider):
 
         messages = [{"role": "system", "content": prompt_content}]
         # 上下文
-        ctx = "\n".join(filter(None, [prefix, suffix]))
+        ctx = "\n<<< Sentence >>>\n".join(filter(None, [prefix, suffix]))
         if ctx:
             messages.append({"role": "assistant", "content": ctx})
         messages.append({"role": "user", "content": f"<<< Sentence >>>\n{text}"})
-
+        
         payload = {
             "model":       self.cfg["model"],
             "messages":    messages,
@@ -460,15 +509,20 @@ PROVIDERS_CFG = {
             "max_retry": MAX_RETRY,
             "timeout":  TIMEOUT
         },
+        PLUS_PROVIDER: {
+            "class":     "PlusProvider",
+            "max_retry": MAX_RETRY,
+            "timeout":   15
+        },
     }
 }
 
 prov_manager = ProviderManager(PROVIDERS_CFG)   # 实例化
 
 # -------------------- 4  GUI 搭建 --------------------
-win = dispatcher.AddWindow(
+translator_win = dispatcher.AddWindow(
     {
-        "ID": 'MyWin',
+        "ID": 'TranslatorWin',
         "WindowTitle": SCRIPT_NAME + SCRIPT_VERSION,
         "Geometry": [X_CENTER, Y_CENTER, WINDOW_WIDTH, WINDOW_HEIGHT],
         "Spacing": 10,
@@ -792,7 +846,7 @@ translations = {
     }
 }    
 
-items       = win.GetItems()
+items       = translator_win.GetItems()
 openai_items = openai_format_config_window.GetItems()
 azure_items = azure_config_window.GetItems()
 deepL_items = deepL_config_window.GetItems()
@@ -916,8 +970,8 @@ def on_lang_checkbox_clicked(ev):
     items["LangEnCheckBox"].Checked = is_en_checked
     switch_language("en" if is_en_checked else "cn")
 
-win.On.LangCnCheckBox.Clicked = on_lang_checkbox_clicked
-win.On.LangEnCheckBox.Clicked = on_lang_checkbox_clicked
+translator_win.On.LangCnCheckBox.Clicked = on_lang_checkbox_clicked
+translator_win.On.LangEnCheckBox.Clicked = on_lang_checkbox_clicked
 
 
 if saved_settings:
@@ -959,12 +1013,12 @@ def close_and_save(settings_file):
 # --- 4.4 Tab 切换 ---
 def on_my_tabs_current_changed(ev):
     items["MyStack"].CurrentIndex = ev["Index"]
-win.On.MyTabs.CurrentChanged = on_my_tabs_current_changed
+translator_win.On.MyTabs.CurrentChanged = on_my_tabs_current_changed
 
 # --- 4.5 打开 OpenAI 配置窗 ---
 def on_show_openai_format(ev):
     openai_format_config_window.Show()
-win.On.ShowOpenAIFormat.Clicked = on_show_openai_format
+translator_win.On.ShowOpenAIFormat.Clicked = on_show_openai_format
 
 def on_openai_close(ev):
     print("OpenAI Format API setup is complete.")
@@ -975,7 +1029,7 @@ openai_format_config_window.On.AITranslatorConfigWin.Close = on_openai_close
 # --- 4.6 打开 Azure 配置窗 ---
 def on_show_azure(ev):
     azure_config_window.Show()
-win.On.ShowAzure.Clicked = on_show_azure
+translator_win.On.ShowAzure.Clicked = on_show_azure
 
 def on_azure_close(ev):
     print("Azure API setup is complete.")
@@ -989,7 +1043,7 @@ azure_config_window.On.AzureRegisterButton.Clicked = on_azure_register_link_butt
 
 def on_show_deepl(ev):
     deepL_config_window.Show()
-win.On.ShowDeepL.Clicked = on_show_deepl
+translator_win.On.ShowDeepL.Clicked = on_show_deepl
 
 def on_deepl_close(ev):
     # 关闭窗口 & 写入 ProviderManager
@@ -1010,19 +1064,19 @@ def on_tts_button(ev):
         webbrowser.open(TTS_KOFI_URL)
     else :
         webbrowser.open(TTS_TAOBAO_URL)
-win.On.TTSButton.Clicked = on_tts_button
+translator_win.On.TTSButton.Clicked = on_tts_button
 def on_whisper_button(ev):
     if items["LangEnCheckBox"].Checked :
         webbrowser.open(WHISPER_KOFI_URL)
     else :
         webbrowser.open(WHISPER_TAOBAO_URL)
-win.On.WhisperButton.Clicked = on_whisper_button
+translator_win.On.WhisperButton.Clicked = on_whisper_button
 def on_open_link_button_clicked(ev):
     if items["LangEnCheckBox"].Checked :
         webbrowser.open(SCRIPT_KOFI_URL)
     else :
         webbrowser.open(SCRIPT_BILIBILI_URL)
-win.On.CopyrightButton.Clicked = on_open_link_button_clicked
+translator_win.On.CopyrightButton.Clicked = on_open_link_button_clicked
 
 # --- 新增模型弹窗 ---
 def on_show_add_model(ev):
@@ -1288,7 +1342,7 @@ def translate_parallel(texts, provider, target_code,
     with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENCY) as pool:
         futures = {}
         for idx, t in enumerate(texts):
-            if isinstance(provider, OpenAIFormatProvider) and ctx_win > 0:
+            if isinstance(provider, (OpenAIFormatProvider, PlusProvider)) and ctx_win > 0:
                 pre = "\n".join(texts[max(0, idx-ctx_win):idx])
                 suf = "\n".join(texts[idx+1: idx+1+ctx_win])
                 fut = pool.submit(provider.translate, t, target_code, pre, suf)
@@ -1326,6 +1380,8 @@ def get_provider_and_target():
     provider_name = items["ProviderCombo"].CurrentText
     target_name   = items["TargetLangCombo"].CurrentText
     print(provider_name)
+    if provider_name == PLUS_PROVIDER:                    # —— 新增 —— #
+        return prov_manager.get(PLUS_PROVIDER), target_name
     if provider_name == OPENAI_FORMAT_PROVIDER:
         if not (openai_items["OpenAIFormatBaseURL"].Text and openai_items["OpenAIFormatApiKey"].Text):
             show_warning_message(STATUS_MESSAGES.enter_api_key)
@@ -1442,7 +1498,7 @@ def on_trans_clicked(ev):
         items["StatusLabel"].Text = "⚠️ 导入失败！"
 
     items["TransButtonTab1"].Enabled = True
-win.On.TransButtonTab1.Clicked = on_trans_clicked
+translator_win.On.TransButtonTab1.Clicked = on_trans_clicked
 # ---------------- 单句翻译按钮 ----------------
 def on_trans2_clicked(ev):
     """
@@ -1491,7 +1547,7 @@ def on_trans2_clicked(ev):
         show_warning_message(STATUS_MESSAGES.initialize_fault)
         print("Translation failed:", e)
     items["TransButtonTab2"].Enabled = True
-win.On.TransButtonTab2.Clicked = on_trans2_clicked
+translator_win.On.TransButtonTab2.Clicked = on_trans2_clicked
 # =============== 8  关闭窗口保存设置 ===============
 def on_close(ev):
     import shutil
@@ -1505,7 +1561,7 @@ def on_close(ev):
     close_and_save(settings_file)
     dispatcher.ExitLoop()
 
-win.On.MyWin.Close = on_close
+translator_win.On.TranslatorWin.Close = on_close
 
 def on_add_model_close(ev):
     openai_format_config_window.Show()
@@ -1513,9 +1569,9 @@ def on_add_model_close(ev):
 add_model_window.On.AddModelWin.Close = on_add_model_close
 # =============== 9  运行 GUI ===============
 loading_win.Hide() 
-win.Show(); 
+translator_win.Show(); 
 dispatcher.RunLoop(); 
-win.Hide(); 
+translator_win.Hide(); 
 openai_format_config_window.Hide()
 azure_config_window.Hide()
 msgbox.Hide()
