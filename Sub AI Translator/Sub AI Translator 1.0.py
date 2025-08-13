@@ -30,7 +30,7 @@ GOOGLE_PROVIDER = "Google"
 AZURE_PROVIDER  = "Microsoft (API Key)"
 DEEPL_PROVIDER = "DeepL (API Key)"
 OPENAI_FORMAT_PROVIDER     = "Open AI Format (API Key)"
-PLUS_PROVIDER = "Free AI"    
+PLUS_PROVIDER = "Free AI (GLM-4-Flash)"    
 
 AZURE_DEFAULT_KEY    = ""
 AZURE_DEFAULT_REGION = ""
@@ -40,21 +40,25 @@ PROVIDER             = 0
 DEEPL_DEFAULT_KEY    = ""
 DEEPL_REGISTER_URL   = "https://www.deepl.com/account/summary"
 CONTEXT_WINDOW = 1
-SYSTEM_PROMPT = """
+PREFIX_PROMPT="""
 You are a professional {target_lang} subtitle translation engine.
-
 Task: Translate ONLY the sentence shown after the tag <<< Sentence >>> into {target_lang}.
+---
+"""
+SYSTEM_PROMPT = """Strict rules you MUST follow:
 
-Strict rules you MUST follow:
 1. Keep every proper noun, personal name, brand, product name, code snippet, file path, URL, and any other non-translatable element EXACTLY as it appears. Do NOT transliterate or translate these.
-2. Follow subtitle style: short, concise, natural, and easy to read.
-3. Output ONLY the translated sentence. No tags, no explanations, no extra spaces.
 
+2. Follow subtitle style: short, concise, natural, and easy to read.
+
+3. Output ONLY the translated sentence. No tags, no explanations, no extra spaces.
+"""
+SUFFIX_PROMPT="""
+---
 Note:
 - The messages with role=assistant are only CONTEXT; do NOT translate them or include them in your output.
-- Translate ONLY the line after <<< Sentence >>>.
+- Translate ONLY the line after <<< Sentence >>>
 """
-
 # --------------------------------------------
 # 语言映射
 # --------------------------------------------
@@ -71,6 +75,20 @@ GOOGLE_LANG_CODE_MAP = {   # Google
     "Portuguese": "pt", "French": "fr", "Indonesian": "id", "German": "de",
     "Russian": "ru", "Italian": "it", "Arabic": "ar", "Turkish": "tr",
     "Ukrainian": "uk", "Vietnamese": "vi", "Uzbek": "uz", "Dutch": "nl",
+}
+DEFAULT_SETTINGS = {
+    "AZURE_DEFAULT_KEY":"",
+    "AZURE_DEFAULT_REGION":"",
+    "DEEPL_DEFAULT_KEY":"",
+    "PROVIDER":0,
+    "OPENAI_FORMAT_BASE_URL": "",
+    "OPENAI_FORMAT_API_KEY": "",
+    "OPENAI_FORMAT_MODEL": 0,
+    "OPENAI_FORMAT_TEMPERATURE":0.3,
+    "SYSTEM_PROMPT":SYSTEM_PROMPT,
+    "TARGET_LANG":0,
+    "CN":True,
+    "EN":False,
 }
 # ===========================================
 import sys
@@ -212,15 +230,31 @@ class BaseProvider(ABC):
     @abstractmethod
     def translate(self, text: str, target_lang: str, *args, **kwargs) -> str: ...
 
+def _compose_prompt_content(target_lang: str, ui_prompt_text: str = "") -> str:
+    base_prompt = (ui_prompt_text or "").strip() or (SYSTEM_PROMPT or "").strip()
+    parts = []
+    pre = (PREFIX_PROMPT or "").strip()
+    suf = (SUFFIX_PROMPT or "").strip()
+    if pre:
+        parts.append(pre)
+    if base_prompt:
+        parts.append(base_prompt)
+    if suf:
+        parts.append(suf)
+    system_prompt = "\n".join(parts)
+    lang = (target_lang or "").strip()
+    system_prompt = system_prompt.replace("{target_lang}", lang).strip()
+    return system_prompt
+    
 class PlusProvider(BaseProvider):
     """通过 Dify Workflow 调用 Plus 模型的翻译服务"""
     name = PLUS_PROVIDER
     _session = requests.Session()
 
-    def translate(self, text, target_lang, prefix: str = "", suffix: str = ""):
-        prompt_content = SYSTEM_PROMPT.format(target_lang=target_lang)
+    def translate(self, text, target_lang, prefix: str = "", suffix: str = "",prompt_content: str = None):
+        prompt_content = prompt_content or _compose_prompt_content(target_lang)
         messages = [{"role": "system", "content": prompt_content}]
-        ctx = "\n<<< Sentence >>>\n".join(filter(None, [prefix, suffix]))
+        ctx = "\nCONTEXT (do not translate)\n".join(filter(None, [prefix, suffix]))
         if ctx:
             messages.append({"role": "assistant", "content": ctx})
         messages.append({"role": "user",
@@ -413,16 +447,16 @@ class OpenAIFormatProvider(BaseProvider):
     _session = requests.Session()
     name = OPENAI_FORMAT_PROVIDER
 
-    def translate(self, text, target_lang, prefix: str = "", suffix: str = ""):
+    def translate(self, text, target_lang, prefix: str = "", suffix: str = "", prompt_content: str = None):
         """
         返回: (翻译文本, usage dict)
         usage 包含 'prompt_tokens', 'completion_tokens', 'total_tokens'
         """
-        prompt_content = SYSTEM_PROMPT.format(target_lang=target_lang)
+        prompt_content = prompt_content or _compose_prompt_content(target_lang)
 
         messages = [{"role": "system", "content": prompt_content}]
         # 上下文
-        ctx = "\n<<< Sentence >>>\n".join(filter(None, [prefix, suffix]))
+        ctx = "\nCONTEXT (do not translate)\n".join(filter(None, [prefix, suffix]))
         if ctx:
             messages.append({"role": "assistant", "content": ctx})
         messages.append({"role": "user", "content": f"<<< Sentence >>>\n{text}"})
@@ -553,7 +587,7 @@ translator_win = dispatcher.AddWindow(
                         })
                 ]),
                 ui.VGroup({"Weight":1},[
-                    ui.LineEdit({"ID": "OriginalTxt", "Text": "","PlaceholderText": "", "Weight": 0.9, "Font": ui.Font({"PixelSize": 15}),"RichText" : False, }),
+                    ui.LineEdit({"ID": "OriginalTxt", "Text": "","PlaceholderText": "", "Weight": 0.9, "Font": ui.Font({"PixelSize": 15}),'ClearButtonEnabled': True ,"RichText" : False, }),
                     ui.Button({"ID": "TransButtonTab2", "Text": "", "Weight": 0.1}),
                     ui.TextEdit({"ID": "TranslateTxt", "Text": "","PlaceholderText": "", "Weight": 0.9, "Font": ui.Font({"PixelSize": 15}),"TextBackgroundColor": { "R": 0.2, "G": 0.2, "B": 0.2 }}),
                     
@@ -605,7 +639,7 @@ openai_format_config_window = dispatcher.AddWindow(
     {
         "ID": "AITranslatorConfigWin",
         "WindowTitle": "AI Translator API",
-        "Geometry": [750, 400, 350, 300],
+        "Geometry": [750, 400, 350, 450],
         "Hidden": True,
         "StyleSheet": """
         * {
@@ -618,24 +652,26 @@ openai_format_config_window = dispatcher.AddWindow(
             [
                 ui.Label({"ID": "OpenAIFormatLabel","Text": "填写AI Translator 信息", "Alignment": {"AlignHCenter": True, "AlignVCenter": True},"Weight": 0.1}),
                 ui.Label({"ID":"OpenAIFormatModelLabel","Text":"模型","Weight":0.1}),
-                ui.HGroup({"Weight": 0.2}, [
+                ui.HGroup({"Weight": 0.1}, [
                     ui.ComboBox({"ID":"OpenAIFormatModelCombo","Weight":0.2}),  
-                    ui.LineEdit({"ID": "OpenAIFormatModelName", "ReadOnly":True, "Text": ""}),
+                    ui.LineEdit({"ID": "OpenAIFormatModelName", "ReadOnly":True, "Text": "","Weight": 0.1}),
                 ]),
-                ui.Label({"ID": "OpenAIFormatBaseURLLabel", "Text": "* Base URL"}),
-                ui.LineEdit({"ID": "OpenAIFormatBaseURL",  "Text": "","PlaceholderText":OPENAI_FORMAT_BASE_URL}),
-                ui.Label({"ID": "OpenAIFormatApiKeyLabel", "Text": "* API Key"}),
-                ui.LineEdit({"ID": "OpenAIFormatApiKey", "Text": "",  "EchoMode": "Password"}),
-                ui.HGroup({"Weight": 0.2}, [
+                ui.Label({"ID": "OpenAIFormatBaseURLLabel", "Text": "* Base URL","Weight": 0.1}),
+                ui.LineEdit({"ID": "OpenAIFormatBaseURL",  "Text": "","PlaceholderText":OPENAI_FORMAT_BASE_URL,"Weight": 0.1}),
+                ui.Label({"ID": "OpenAIFormatApiKeyLabel", "Text": "* API Key","Weight": 0.1}),
+                ui.LineEdit({"ID": "OpenAIFormatApiKey", "Text": "",  "EchoMode": "Password","Weight": 0.1}),
+                ui.HGroup({"Weight": 0.1}, [
                     ui.Label({"ID": "OpenAIFormatTemperatureLabel", "Text": "* Temperature"}),
                 ui.DoubleSpinBox({"ID": "OpenAIFormatTemperatureSpinBox", "Value": 0.3, "Minimum": 0.0, "Maximum": 1.0, "SingleStep": 0.01, "Weight": 1})
                 ]),
-                ui.HGroup({"Weight": 0.2}, [
+                ui.Label({"ID": "SystemPromptLabel", "Text": "* System Prompt","Weight": 0.1}),
+                ui.TextEdit({"ID": "SystemPromptTxt", "Text": SYSTEM_PROMPT,"PlaceholderText": "", "Weight": 0.9, }),
+                ui.HGroup({"Weight": 0.1}, [
                     ui.Button({"ID": "VerifyModel", "Text": "验证","Weight": 1}),
                     ui.Button({"ID": "ShowAddModel", "Text": "新增模型","Weight": 1}),
                     ui.Button({"ID": "DeleteModel", "Text": "删除模型","Weight": 1}),
                 ]),
-                ui.Label({"ID": "VerifyStatus", "Text": "", "Alignment": {"AlignHCenter": True}}),
+                #ui.Label({"ID": "VerifyStatus", "Text": "", "Alignment": {"AlignHCenter": True}}),
                 
             ]
         )
@@ -732,7 +768,7 @@ msgbox = dispatcher.AddWindow(
         [
             ui.VGroup(
                 [
-                    ui.Label({"ID": 'WarningLabel', "Text": ""}),
+                    ui.Label({"ID": 'WarningLabel', "Text": "",'Alignment': { 'AlignCenter' : True },'WordWrap': True}),
                     ui.HGroup(
                         {
                             "Weight": 0,
@@ -795,6 +831,7 @@ translations = {
         "AzureRegisterButton":"注册",
         "AzureLabel":"填写 Azure API 信息",
         "OpenAIFormatLabel":"填写 OpenAI Format API 信息",
+        "SystemPromptLabel":"* 系统提示词",
         "VerifyModel":"验证",
         "ShowAddModel":"新增模型",
         "DeleteModel":"删除模型",
@@ -834,6 +871,7 @@ translations = {
         "AzureRegisterButton":"Register",
         "AzureLabel":"Azure API",
         "OpenAIFormatLabel":"OpenAI Format API",
+        "SystemPromptLabel":"* System Prompt",
         "VerifyModel":"Verify",
         "ShowAddModel":"Add Model",
         "DeleteModel":"Delete Model",
@@ -897,20 +935,7 @@ def load_settings(settings_file):
                     return None
     return None
 
-default_settings = {
-    "AZURE_DEFAULT_KEY":"",
-    "AZURE_DEFAULT_REGION":"",
-    "DEEPL_DEFAULT_KEY":"",
-    "PROVIDER":0,
-    "OPENAI_FORMAT_BASE_URL": "",
-    "OPENAI_FORMAT_API_KEY": "",
-    "OPENAI_FORMAT_MODEL": 0,
-    "OPENAI_FORMAT_TEMPERATURE":0.3,
-  
-    "TARGET_LANG":0,
-    "CN":True,
-    "EN":False,
-}
+
 
 check_or_create_file(settings_file)
 check_or_create_file(custom_models_file)
@@ -976,17 +1001,18 @@ translator_win.On.LangEnCheckBox.Clicked = on_lang_checkbox_clicked
 
 if saved_settings:
     
-    items["TargetLangCombo"].CurrentIndex = saved_settings.get("TARGET_LANG", default_settings["TARGET_LANG"])
-    items["LangCnCheckBox"].Checked = saved_settings.get("CN", default_settings["CN"])
-    items["LangEnCheckBox"].Checked = saved_settings.get("EN", default_settings["EN"])
-    items["ProviderCombo"].CurrentIndex = saved_settings.get("PROVIDER", default_settings["PROVIDER"])
-    azure_items["AzureApiKey"].Text = saved_settings.get("AZURE_DEFAULT_KEY", default_settings["AZURE_DEFAULT_KEY"])
-    azure_items["AzureRegion"].Text = saved_settings.get("AZURE_DEFAULT_REGION", default_settings["AZURE_DEFAULT_REGION"])
-    deepL_items["DeepLApiKey"].Text = saved_settings.get("DEEPL_DEFAULT_KEY",default_settings["DEEPL_DEFAULT_KEY"])
-    openai_items["OpenAIFormatModelCombo"].CurrentIndex = saved_settings.get("OPENAI_FORMAT_MODEL", default_settings["OPENAI_FORMAT_MODEL"])
-    openai_items["OpenAIFormatBaseURL"].Text = saved_settings.get("OPENAI_FORMAT_BASE_URL", default_settings["OPENAI_FORMAT_BASE_URL"])
-    openai_items["OpenAIFormatApiKey"].Text = saved_settings.get("OPENAI_FORMAT_API_KEY", default_settings["OPENAI_FORMAT_API_KEY"])
-    openai_items["OpenAIFormatTemperatureSpinBox"].Value = saved_settings.get("OPENAI_FORMAT_TEMPERATURE", default_settings["OPENAI_FORMAT_TEMPERATURE"])
+    items["TargetLangCombo"].CurrentIndex = saved_settings.get("TARGET_LANG", DEFAULT_SETTINGS["TARGET_LANG"])
+    items["LangCnCheckBox"].Checked = saved_settings.get("CN", DEFAULT_SETTINGS["CN"])
+    items["LangEnCheckBox"].Checked = saved_settings.get("EN", DEFAULT_SETTINGS["EN"])
+    items["ProviderCombo"].CurrentIndex = saved_settings.get("PROVIDER", DEFAULT_SETTINGS["PROVIDER"])
+    azure_items["AzureApiKey"].Text = saved_settings.get("AZURE_DEFAULT_KEY", DEFAULT_SETTINGS["AZURE_DEFAULT_KEY"])
+    azure_items["AzureRegion"].Text = saved_settings.get("AZURE_DEFAULT_REGION", DEFAULT_SETTINGS["AZURE_DEFAULT_REGION"])
+    deepL_items["DeepLApiKey"].Text = saved_settings.get("DEEPL_DEFAULT_KEY",DEFAULT_SETTINGS["DEEPL_DEFAULT_KEY"])
+    openai_items["OpenAIFormatModelCombo"].CurrentIndex = saved_settings.get("OPENAI_FORMAT_MODEL", DEFAULT_SETTINGS["OPENAI_FORMAT_MODEL"])
+    openai_items["OpenAIFormatBaseURL"].Text = saved_settings.get("OPENAI_FORMAT_BASE_URL", DEFAULT_SETTINGS["OPENAI_FORMAT_BASE_URL"])
+    openai_items["OpenAIFormatApiKey"].Text = saved_settings.get("OPENAI_FORMAT_API_KEY", DEFAULT_SETTINGS["OPENAI_FORMAT_API_KEY"])
+    openai_items["OpenAIFormatTemperatureSpinBox"].Value = saved_settings.get("OPENAI_FORMAT_TEMPERATURE", DEFAULT_SETTINGS["OPENAI_FORMAT_TEMPERATURE"])
+    openai_items["SystemPromptTxt"].Text=saved_settings.get("SYSTEM_PROMPT", DEFAULT_SETTINGS["SYSTEM_PROMPT"])
 if items["LangEnCheckBox"].Checked :
     switch_language("en")
 else:
@@ -1006,6 +1032,7 @@ def close_and_save(settings_file):
         "OPENAI_FORMAT_API_KEY": openai_items["OpenAIFormatApiKey"].Text,
         "OPENAI_FORMAT_TEMPERATURE": openai_items["OpenAIFormatTemperatureSpinBox"].Value,
         "TARGET_LANG":items["TargetLangCombo"].CurrentIndex,
+        "SYSTEM_PROMPT":openai_items["SystemPromptTxt"].PlainText,
 
     }
 
@@ -1334,7 +1361,8 @@ def import_srt_to_first_empty(path):
 
 # =============== 并发翻译封装 ===============
 def translate_parallel(texts, provider, target_code,
-                       status_label=None, ctx_win=CONTEXT_WINDOW):
+                       status_label=None, ctx_win=CONTEXT_WINDOW,
+                       prompt_content=None):
     total, done = len(texts), 0
     result = [None] * total
     total_tokens = 0
@@ -1342,10 +1370,13 @@ def translate_parallel(texts, provider, target_code,
     with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENCY) as pool:
         futures = {}
         for idx, t in enumerate(texts):
-            if isinstance(provider, (OpenAIFormatProvider, PlusProvider)) and ctx_win > 0:
-                pre = "\n".join(texts[max(0, idx-ctx_win):idx])
-                suf = "\n".join(texts[idx+1: idx+1+ctx_win])
-                fut = pool.submit(provider.translate, t, target_code, pre, suf)
+            if isinstance(provider, (OpenAIFormatProvider, PlusProvider)):
+                if ctx_win > 0:
+                    pre = "\n".join(texts[max(0, idx-ctx_win):idx])
+                    suf = "\n".join(texts[idx+1: idx+1+ctx_win])
+                    fut = pool.submit(provider.translate, t, target_code, pre, suf, prompt_content)
+                else:
+                    fut = pool.submit(provider.translate, t, target_code, prompt_content=prompt_content)
             else:
                 fut = pool.submit(provider.translate, t, target_code)
             futures[fut] = idx
@@ -1354,7 +1385,6 @@ def translate_parallel(texts, provider, target_code,
             i = futures[f]
             try:
                 res = f.result()
-                # 只有真正返回 tuple 才统计 token
                 if isinstance(res, tuple):
                     text_i, usage = res
                     tokens = usage.get("total_tokens", 0)
@@ -1371,7 +1401,7 @@ def translate_parallel(texts, provider, target_code,
                 en = f"Start translating... {pct}% ({done}/{total})  Tokens used: {total_tokens}"
                 zh = f"开始翻译... {pct}% （{done}/{total}）  已消耗令牌：{total_tokens}"
                 show_dynamic_message(en, zh)
-    return result,total_tokens
+    return result, total_tokens
 
 
 # =============== 主按钮逻辑（核心差异处 ★★★） ===============
@@ -1433,7 +1463,8 @@ def on_trans_clicked(ev):
 
     # ---------- 2 Provider & 目标语种 ----------
     provider, target_code = get_provider_and_target()
-
+    ui_prompt_txt = openai_items["SystemPromptTxt"].PlainText
+    system_prompt = _compose_prompt_content(target_code, ui_prompt_txt)
     # ---------- 3 连通性轻量检测 ----------
     items["TransButtonTab1"].Enabled = False
     show_warning_message(STATUS_MESSAGES.initialize)
@@ -1474,7 +1505,9 @@ def on_trans_clicked(ev):
     )
     texts = [s["text"] for s in subs]
     translated, total_tokens = translate_parallel(
-        texts, provider, target_code, status_label=items["StatusLabel"]
+        texts, provider, target_code,
+        status_label=items["StatusLabel"],
+        prompt_content=system_prompt   # ✅ 传入
     )
     for s, new_txt in zip(subs, translated):
         s["text"] = new_txt or ""
@@ -1516,8 +1549,10 @@ def on_trans2_clicked(ev):
     # ---------- 2 轻量检测 & 翻译 ----------
     try:
         # 若 provider 是 OpenAIFormatProvider，translate 返回 (text, usage)
-        if isinstance(provider, OpenAIFormatProvider):
-            text_out, _ = provider.translate(src, target_code)
+        if isinstance(provider, (OpenAIFormatProvider, PlusProvider)):
+            ui_prompt_txt = openai_items["SystemPromptTxt"].PlainText
+            system_prompt = _compose_prompt_content(target_code, ui_prompt_txt)
+            text_out, _ = provider.translate(src, target_code, prompt_content=system_prompt)
         else:
             res = provider.translate(src, target_code)
             # 有些 provider 返回 None，应特殊处理
