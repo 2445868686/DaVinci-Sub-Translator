@@ -89,6 +89,7 @@ DEFAULT_SETTINGS = {
     "TARGET_LANG":0,
     "CN":True,
     "EN":False,
+    "CONCURRENCY": 10,
 }
 # ===========================================
 import sys
@@ -608,6 +609,10 @@ translator_win = dispatcher.AddWindow(
                         ui.Label({"ID":"OpenAIFormatConfigLabel","Text":"OpenAI Format","Weight":0.1}),
                         ui.Button({"ID":"ShowOpenAIFormat","Text":"配置","Weight":0.1}),
                     ]),
+                    ui.HGroup({"Weight":0.1},[
+                        ui.Label({"ID":"ConcurrencyLabel","Text":"Concurrency","Weight":0.1}),
+                        ui.SpinBox({"ID":"ConcurrencySpinBox", "Value": 10, "Minimum": 1, "Maximum": 100, "Weight": 0.1}),
+                    ]),
                     ui.Label({"ID":"MoreScriptLabel","Text":"","Weight":0.1,"Alignment": {"AlignHCenter": True, "AlignVCenter": True}}),
                     ui.Button({"ID":"TTSButton","Text":"语音合成","Weight":0.1}),
                     ui.Button({"ID":"WhisperButton","Text":"AI字幕生成","Weight":0.1}),
@@ -839,6 +844,7 @@ translations = {
         "OpenAIFormatModelNameLabel":"* 模型",
         "NewModelDisplayLabel":"显示名称",
         "AddModelBtn":"添加",
+        "ConcurrencyLabel": "并发数",
         
         
     },
@@ -879,6 +885,7 @@ translations = {
         "OpenAIFormatModelNameLabel":"* Model name",
         "NewModelDisplayLabel":"Display name",
         "AddModelBtn":"Add",
+        "ConcurrencyLabel": "Concurrency",
         
         
     }
@@ -1005,6 +1012,7 @@ if saved_settings:
     items["LangCnCheckBox"].Checked = saved_settings.get("CN", DEFAULT_SETTINGS["CN"])
     items["LangEnCheckBox"].Checked = saved_settings.get("EN", DEFAULT_SETTINGS["EN"])
     items["ProviderCombo"].CurrentIndex = saved_settings.get("PROVIDER", DEFAULT_SETTINGS["PROVIDER"])
+    items["ConcurrencySpinBox"].Value = saved_settings.get("CONCURRENCY", DEFAULT_SETTINGS.get("CONCURRENCY", 10))
     azure_items["AzureApiKey"].Text = saved_settings.get("AZURE_DEFAULT_KEY", DEFAULT_SETTINGS["AZURE_DEFAULT_KEY"])
     azure_items["AzureRegion"].Text = saved_settings.get("AZURE_DEFAULT_REGION", DEFAULT_SETTINGS["AZURE_DEFAULT_REGION"])
     deepL_items["DeepLApiKey"].Text = saved_settings.get("DEEPL_DEFAULT_KEY",DEFAULT_SETTINGS["DEEPL_DEFAULT_KEY"])
@@ -1033,6 +1041,7 @@ def close_and_save(settings_file):
         "OPENAI_FORMAT_TEMPERATURE": openai_items["OpenAIFormatTemperatureSpinBox"].Value,
         "TARGET_LANG":items["TargetLangCombo"].CurrentIndex,
         "SYSTEM_PROMPT":openai_items["SystemPromptTxt"].PlainText,
+        "CONCURRENCY": items["ConcurrencySpinBox"].Value,
 
     }
 
@@ -1367,7 +1376,14 @@ def translate_parallel(texts, provider, target_code,
     result = [None] * total
     total_tokens = 0
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENCY) as pool:
+    try:
+        concurrency = items["ConcurrencySpinBox"].Value
+        if not isinstance(concurrency, int) or concurrency < 1:
+            concurrency = 10
+    except (KeyError, AttributeError):
+        concurrency = 10
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as pool:
         futures = {}
         for idx, t in enumerate(texts):
             if isinstance(provider, (OpenAIFormatProvider, PlusProvider)):
